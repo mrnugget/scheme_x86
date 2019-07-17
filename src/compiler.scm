@@ -1,0 +1,11 @@
+(load "test-driver.scm")
+(load "tests-1-1.scm")
+
+(define (emit-program expr)
+  (emit "\t.text")
+  (emit "\t.p2align 4,,15")
+  (emit ".globl scheme_entry")
+  (emit "\t.type scheme_entry, @function")
+  (emit "scheme_entry:")
+  (emit "\tmovl $~a, %eax" expr)
+  (emit "\tret"))
