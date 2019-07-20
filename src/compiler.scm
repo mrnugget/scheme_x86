@@ -1,11 +1,20 @@
-(load "test-driver.scm")
-(load "tests-1-1.scm")
+(define compile-port
+  (make-parameter
+   (current-output-port)
+   (lambda (p)
+     (unless (output-port? p)
+       (error 'compile-port (format "Not an output port ~s." p)))
+     p)))
+
+(define (emit . args)
+  (apply fprintf (compile-port) args)
+  (newline (compile-port)))
 
 (define (emit-program expr)
-  (emit "\t.text")
-  (emit "\t.p2align 4,,15")
+  (emit "  .text")
+  (emit "  .p2align 4,,15")
   (emit ".globl scheme_entry")
-  (emit "\t.type scheme_entry, @function")
+  (emit "  .type scheme_entry, @function")
   (emit "scheme_entry:")
-  (emit "\tmovl $~a, %eax" expr)
-  (emit "\tret"))
+  (emit "  movl $~a, %eax" expr)
+  (emit "  ret"))

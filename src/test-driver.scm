@@ -1,16 +1,4 @@
-;; Test runner for the incremental compiler
-
-(define compile-port
-  (make-parameter
-   (current-output-port)
-   (lambda (p)
-     (unless (output-port? p)
-       (error 'compile-port (format "Not an output port ~s." p)))
-     p)))
-
-(define (emit . args)
-  (apply fprintf (compile-port) args)
-  (newline (compile-port)))
+(load "compiler.scm")
 
 (define (build)
   (unless (zero? (system "make emitted --quiet"))
@@ -37,7 +25,6 @@
       (emit-program expr))
     (close-output-port p)))
 
-;; Compile and run a single expression, great for interactive devel
 (define (run expr)
   (compile-program expr)
   (build)
@@ -85,3 +72,5 @@
                 [else
                  (test-one i (car tests))
                  (g (add1 i) (cdr tests))])))))))
+
+(load "tests/tests-1-1.scm")

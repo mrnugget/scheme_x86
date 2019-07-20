@@ -26,7 +26,7 @@ emitted: runtime.c emitted.s
 
 .PHONY: test
 test:
-	echo '(test-all)' | scheme compiler.scm --quiet
+	echo '(test-all)' | scheme test-driver.scm --quiet
 
 .PHONY: clean
 clean:
