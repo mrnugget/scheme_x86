@@ -16,11 +16,17 @@
   (apply fprintf (compile-port) (list "~a:" label))
   (newline (compile-port)))
 
+(define fixnum-shift 2)
+
+(define (immediate-rep expr)
+  (cond [(integer? expr) (ash expr fixnum-shift)]
+        [else expr]))
+
 (define (emit-program expr)
   (emit ".text")
   (emit ".p2align 4,,15")
   (emit ".globl scheme_entry")
   (emit ".type scheme_entry, @function")
   (emit-label "scheme_entry")
-  (emit "movl $~a, %eax" expr)
+  (emit "movl $~a, %eax" (immediate-rep expr))
   (emit "ret"))
