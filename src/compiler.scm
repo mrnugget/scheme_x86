@@ -7,14 +7,20 @@
      p)))
 
 (define (emit . args)
-  (apply fprintf (compile-port) args)
+  (let ([format (string-append "\t" (car args))]
+        [rest (cdr args)])
+    (apply fprintf (compile-port) format rest)
+    (newline (compile-port))))
+
+(define (emit-label label)
+  (apply fprintf (compile-port) (list "~a:" label))
   (newline (compile-port)))
 
 (define (emit-program expr)
-  (emit "  .text")
-  (emit "  .p2align 4,,15")
+  (emit ".text")
+  (emit ".p2align 4,,15")
   (emit ".globl scheme_entry")
-  (emit "  .type scheme_entry, @function")
-  (emit "scheme_entry:")
-  (emit "  movl $~a, %eax" expr)
-  (emit "  ret"))
+  (emit ".type scheme_entry, @function")
+  (emit-label "scheme_entry")
+  (emit "movl $~a, %eax" expr)
+  (emit "ret"))
