@@ -23,9 +23,8 @@
 
 (define (immediate-rep expr)
   (cond [(integer? expr) (ash expr fixnum-shift)]
-        [(boolean? expr) (if expr
-                             (logior (ash 1 bool-shift) bool-tag)
-                             bool-tag)]
+        [(boolean? expr) (let ([val (if expr 1 0)])
+                           (logior (ash val bool-shift) bool-tag))]
         [else expr]))
 
 (define (emit-program expr)
