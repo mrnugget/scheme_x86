@@ -73,4 +73,6 @@
                  (test-one i (car tests))
                  (g (add1 i) (cdr tests))])))))))
 
-(load "tests/tests-1-1.scm")
+(let* ([test-dir (format "~a/~a" (current-directory) "tests")]
+       [files (directory-list test-dir)])
+  (map (lambda (f) (load (format "~a/~a" test-dir f))) files))

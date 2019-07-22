@@ -18,8 +18,14 @@
 
 (define fixnum-shift 2)
 
+(define bool-shift 8)
+(define bool-tag 15)
+
 (define (immediate-rep expr)
   (cond [(integer? expr) (ash expr fixnum-shift)]
+        [(boolean? expr) (if expr
+                             (logior (ash 1 bool-shift) bool-tag)
+                             bool-tag)]
         [else expr]))
 
 (define (emit-program expr)
