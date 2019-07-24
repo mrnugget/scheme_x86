@@ -5,9 +5,9 @@
 #define fixnum_tag        0
 #define fixnum_shift      2
 
-#define boolean_mask       255
-#define boolean_tag        15
-#define boolean_shift      8
+#define boolean_mask       127 // Look at 7 bits
+#define boolean_tag        31
+#define boolean_shift      7
 
 int main(int argc, char** argv) {
     int val = scheme_entry();
@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
             printf("#f\n");
         }
     } else {
-        printf("unrecognized value\n");
+        printf("unrecognized value: %d\n", val);
     }
 
     return 0;
