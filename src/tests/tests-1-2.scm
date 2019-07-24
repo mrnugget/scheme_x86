@@ -2,6 +2,9 @@
   [#t  => "#t\n"]
   [#f  => "#f\n"])
 
+(add-tests-with-string-output "nil list"
+  [()  => "()\n"])
+
 (add-tests-with-string-output "characters"
    [#\tab => "#\\tab\n"]
    [#\newline => "#\\newline\n"]

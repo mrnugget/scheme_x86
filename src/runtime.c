@@ -13,6 +13,8 @@
 #define char_tag        15
 #define char_shift      8
 
+#define empty_list 47
+
 int main(int argc, char** argv) {
     int val = scheme_entry();
 
@@ -25,6 +27,8 @@ int main(int argc, char** argv) {
         } else {
             printf("#f\n");
         }
+    } else if (val == empty_list){
+        printf("()\n");
     } else if ((val & char_mask) == char_tag){
         int c = val >> char_shift;
 

@@ -24,8 +24,11 @@
 (define bool-tag 31)
 (define bool-shift 8)
 
+(define empty-list 47) ;; 00101111 - 0x2f
+
 (define (immediate-rep expr)
   (cond [(integer? expr) (ash expr fixnum-shift)]
+        [(null? expr) empty-list]
         [(boolean? expr) (let ([val (if expr 1 0)])
                            (logior (ash val bool-shift) bool-tag))]
         [(char? expr) (let ([val (char->integer expr)])
