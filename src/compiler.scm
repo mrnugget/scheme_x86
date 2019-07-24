@@ -21,11 +21,16 @@
 (define bool-tag 31)
 (define bool-shift 7)
 
+(define char-tag 15)
+(define char-shift 8)
+
 (define (immediate-rep expr)
   (cond [(integer? expr) (ash expr fixnum-shift)]
         [(boolean? expr) (let ([val (if expr 1 0)])
                            (logior (ash val bool-shift) bool-tag))]
-        [else expr]))
+        [(char? expr) (let ([val (char->integer expr)])
+                           (logior (ash val char-shift) char-tag))]
+        [else 0]))
 
 (define (emit-program expr)
   (emit ".text")

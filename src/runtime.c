@@ -9,6 +9,10 @@
 #define boolean_tag        31
 #define boolean_shift      7
 
+#define char_mask       255 // Look at 8 bits
+#define char_tag        15
+#define char_shift      8
+
 int main(int argc, char** argv) {
     int val = scheme_entry();
 
@@ -21,6 +25,14 @@ int main(int argc, char** argv) {
         } else {
             printf("#f\n");
         }
+    } else if ((val & char_mask) == char_tag){
+        int c = val >> char_shift;
+
+        if      (c == '\t') { printf("#\\tab\n"); }
+        else if (c == '\n') { printf("#\\newline\n"); }
+        else if (c == '\r') { printf("#\\return\n"); }
+        else if (c == ' ')  { printf("#\\space\n"); }
+        else                { printf("#\\%c\n", c); }
     } else {
         printf("unrecognized value: %d\n", val);
     }
