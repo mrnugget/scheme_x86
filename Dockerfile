@@ -26,3 +26,4 @@ RUN cd /tmp \
 
 ADD . /code
 
+ENTRYPOINT ["/bin/bash"]
