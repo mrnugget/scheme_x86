@@ -20,3 +20,9 @@ series of blog posts.
 docker build -t incremental . && \
   docker run -it -v $(pwd):/code incremental -c 'cd /code/src/ && make test'
 ```
+
+Running a single test is possible by specifying the filename:
+
+```
+TEST=test-unary-primitives make test
+```

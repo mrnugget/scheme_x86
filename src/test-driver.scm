@@ -73,6 +73,23 @@
                  (test-one i (car tests))
                  (g (add1 i) (cdr tests))])))))))
 
-(let* ([test-dir (format "~a/~a" (current-directory) "tests")]
-       [files (directory-list test-dir)])
-  (map (lambda (f) (load (format "~a/~a" test-dir f))) files))
+(define (parse-test-file args)
+  (do ([args args (cdr args)] [test-file ""])
+    ((or (not (equal? "" test-file)) (null? args))
+     test-file)
+    (if (and (equal? (car args) "--test") (not (equal? (cadr args) "")))
+        (set! test-file (format "~a.scm" (cadr args))))))
+
+(let* ([test-file (parse-test-file (cdr (command-line)))]
+       [test-dir (format "~a/~a" (current-directory) "tests")]
+       [files (directory-list test-dir)]
+       [load-file (lambda (f) (load (format "~a/~a" test-dir f)))])
+  (if (not (equal? test-file ""))
+      (begin
+        (printf "Running single test file '~a'...\n" test-file)
+        (load-file test-file)
+        (test-all))
+      (begin
+        (printf "Running all test files...\n")
+        (map load-file files)
+        (test-all))))
