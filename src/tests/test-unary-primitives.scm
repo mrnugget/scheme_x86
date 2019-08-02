@@ -1,2 +1,2 @@
-(add-tests-with-string-output "prim-add1"
-  [(prim-add1 1)  => "2\n"])
+(add-tests-with-string-output "prim-apply add1"
+  [(prim-apply add1 1)  => "2\n"])

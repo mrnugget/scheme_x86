@@ -35,11 +35,29 @@
                            (logior (ash val char-shift) char-tag))]
         [else 0]))
 
+(define (immediate? expr)
+  (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
+
+(define (prim-apply? expr) (eq? (car expr) 'prim-apply))
+(define (prim-apply-fn expr) (cadr expr))
+(define (prim-apply-args expr) (cddr expr))
+
+(define (emit-prim-apply expr)
+  (case (prim-apply-fn expr)
+    [(add1)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit "addl $~a, %eax" (immediate-rep 1))]))
+
+(define (emit-expr expr)
+  (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
+        [(prim-apply? expr) (emit-prim-apply expr)]
+        [else (emit "movl $99, %eax")]))
+
 (define (emit-program expr)
   (emit ".text")
   (emit ".p2align 4,,15")
   (emit ".globl scheme_entry")
   (emit ".type scheme_entry, @function")
   (emit-label "scheme_entry")
-  (emit "movl $~a, %eax" (immediate-rep expr))
+  (emit-expr expr)
   (emit "ret"))
