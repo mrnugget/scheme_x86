@@ -30,6 +30,8 @@
 
 (define empty-list 47) ;; 00101111 - 0x2f
 
+(define wordsize 4)
+
 (define (immediate-rep expr)
   (cond [(integer? expr) (ash expr fixnum-shift)]
         [(null? expr) empty-list]
@@ -45,28 +47,48 @@
 (define (prim-apply? expr) (eq? (car expr) 'prim-apply))
 (define (prim-apply-fn expr) (cadr expr))
 (define (prim-apply-args expr) (cddr expr))
+(define (prim-apply-arg-1 expr) (caddr expr))
+(define (prim-apply-arg-2 expr) (cadddr expr))
 
-(define (emit-prim-apply expr)
-  (for-each emit-expr (reverse (prim-apply-args expr)))
+(define (emit-prim-apply expr stack-index)
   (case (prim-apply-fn expr)
-    [(add1) (emit "addl $~a, %eax" (immediate-rep 1))]
-    [(sub1) (emit "subl $~a, %eax" (immediate-rep 1))]
+    [(add1)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit "addl $~a, %eax" (immediate-rep 1))]
+    [(sub1)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit "subl $~a, %eax" (immediate-rep 1))]
     [(fixnum->char)
-      (emit "shl $~s, %eax" (- char-shift fixnum-shift))
-      (emit "or $~s, %eax" char-tag)]
+     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit "shl $~s, %eax" (- char-shift fixnum-shift))
+     (emit "or $~s, %eax" char-tag)]
     [(char->fixnum)
-      (emit "shr $~s, %eax" (- char-shift fixnum-shift))]
-    [(zero?) (emit-eax-eq? 0)]
-    [(null?) (emit-eax-eq? empty-list)]
+     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit "shr $~s, %eax" (- char-shift fixnum-shift))]
+    [(zero?)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-eax-eq? 0)]
+    [(null?)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-eax-eq? empty-list)]
     [(fixnum?)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
      (emit "andl $~a, %eax" fixnum-mask)
      (emit-eax-eq? fixnum-tag)]
     [(boolean?)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
      (emit "andl $~a, %eax" bool-mask)
      (emit-eax-eq? bool-tag)]
     [(char?)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
      (emit "andl $~a, %eax" char-mask)
-     (emit-eax-eq? char-tag)]))
+     (emit-eax-eq? char-tag)]
+    [(+)
+     (emit-expr (prim-apply-arg-1 expr) stack-index)
+     (emit "movl %eax, ~a(%esp)" stack-index)
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize))
+     (emit "addl ~a(%esp), %eax" stack-index)
+     ]))
 
 (define (emit-eax-eq? val)
   (emit "cmpl $~a, %eax" val)
@@ -75,9 +97,9 @@
   (emit "sall $~a, %eax" bool-shift)
   (emit "orl $~a, %eax" bool-tag))
 
-(define (emit-expr expr)
+(define (emit-expr expr stack-index)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
-        [(prim-apply? expr) (emit-prim-apply expr)]
+        [(prim-apply? expr) (emit-prim-apply expr stack-index)]
         [else (emit "movl $99, %eax")]))
 
 (define (emit-program expr)
@@ -86,5 +108,5 @@
   (emit ".globl scheme_entry")
   (emit ".type scheme_entry, @function")
   (emit-label "scheme_entry")
-  (emit-expr expr)
+  (emit-expr expr (- wordsize))
   (emit "ret"))
