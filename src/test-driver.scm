@@ -77,7 +77,9 @@
   (do ([args args (cdr args)] [test-file ""])
     ((or (not (equal? "" test-file)) (null? args))
      test-file)
-    (if (and (equal? (car args) "--test") (not (equal? (cadr args) "")))
+    (if (and (equal? (car args) "--test")
+             (not (null? (cdr args)))
+             (not (equal? (cadr args) "")))
         (set! test-file (format "~a.scm" (cadr args))))))
 
 (let* ([test-file (parse-test-file (cdr (command-line)))]
