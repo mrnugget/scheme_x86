@@ -46,7 +46,12 @@
   (for-each emit-expr (reverse (prim-apply-args expr)))
   (case (prim-apply-fn expr)
     [(add1) (emit "addl $~a, %eax" (immediate-rep 1))]
-    [(sub1) (emit "subl $~a, %eax" (immediate-rep 1))]))
+    [(sub1) (emit "subl $~a, %eax" (immediate-rep 1))]
+    [(fixnum->char)
+      (emit "shl $~s, %eax" (- char-shift fixnum-shift))
+      (emit "or $~s, %eax" char-tag)]
+    [(char->fixnum)
+      (emit "shr $~s, %eax" (- char-shift fixnum-shift))]))
 
 (define (emit-expr expr)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
