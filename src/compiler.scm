@@ -51,7 +51,15 @@
       (emit "shl $~s, %eax" (- char-shift fixnum-shift))
       (emit "or $~s, %eax" char-tag)]
     [(char->fixnum)
-      (emit "shr $~s, %eax" (- char-shift fixnum-shift))]))
+      (emit "shr $~s, %eax" (- char-shift fixnum-shift))]
+    [(zero?) (emit-eax-eq? 0)]))
+
+(define (emit-eax-eq? val)
+  (emit "cmpl $~a, %eax" val)
+  (emit "movl $0, %eax")
+  (emit "sete %al")
+  (emit "sall $~a, %eax" bool-shift)
+  (emit "orl $~a, %eax" bool-tag))
 
 (define (emit-expr expr)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]

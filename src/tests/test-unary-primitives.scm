@@ -15,7 +15,7 @@
   [(prim-apply sub1 -536870911) => "-536870912\n"]
   [(prim-apply sub1 (prim-apply sub1 2)) => "0\n"])
 
-(add-tests-with-string-output "fixnum->char and char->fixnum"
+(add-tests-with-string-output "prim-apply fixnum->char and prim-apply char->fixnum"
    [(prim-apply fixnum->char 65) => "#\\A\n"]
    [(prim-apply fixnum->char 97) => "#\\a\n"]
    [(prim-apply fixnum->char 122) => "#\\z\n"]
@@ -30,3 +30,11 @@
    [(prim-apply char->fixnum #\9) => "57\n"]
    [(prim-apply char->fixnum (prim-apply fixnum->char 12)) => "12\n"]
    [(prim-apply fixnum->char (prim-apply char->fixnum #\x)) => "#\\x\n"])
+
+
+(add-tests-with-string-output "prim-apply zero?"
+   [(prim-apply zero? 0) => "#t\n"]
+   [(prim-apply zero? 1) => "#f\n"]
+   [(prim-apply zero? -1) => "#f\n"]
+   [(prim-apply zero? 64) => "#f\n"]
+   [(prim-apply zero? 960) => "#f\n"])
