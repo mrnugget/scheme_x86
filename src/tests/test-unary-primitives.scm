@@ -38,3 +38,54 @@
    [(prim-apply zero? -1) => "#f\n"]
    [(prim-apply zero? 64) => "#f\n"]
    [(prim-apply zero? 960) => "#f\n"])
+
+(add-tests-with-string-output "fixnum?"
+   [(prim-apply fixnum? 0) => "#t\n"]
+   [(prim-apply fixnum? 1) => "#t\n"]
+   [(prim-apply fixnum? -1) => "#t\n"]
+   [(prim-apply fixnum? 37287) => "#t\n"]
+   [(prim-apply fixnum? -23873) => "#t\n"]
+   [(prim-apply fixnum? 536870911) => "#t\n"]
+   [(prim-apply fixnum? -536870912) => "#t\n"]
+   [(prim-apply fixnum? #t) => "#f\n"]
+   [(prim-apply fixnum? #f) => "#f\n"]
+   [(prim-apply fixnum? ()) => "#f\n"]
+   [(prim-apply fixnum? #\Q) => "#f\n"]
+   [(prim-apply fixnum? (prim-apply fixnum? 12)) => "#f\n"]
+   [(prim-apply fixnum? (prim-apply fixnum? #f)) => "#f\n"]
+   [(prim-apply fixnum? (prim-apply fixnum? #\A)) => "#f\n"]
+   [(prim-apply fixnum? (prim-apply char->fixnum #\r)) => "#t\n"]
+   [(prim-apply fixnum? (prim-apply fixnum->char 12)) => "#f\n"])
+
+(add-tests-with-string-output "null?"
+   [(prim-apply null? ()) => "#t\n"]
+   [(prim-apply null? #f) => "#f\n"]
+   [(prim-apply null? #t) => "#f\n"]
+   [(prim-apply null? (null? ())) => "#f\n"]
+   [(prim-apply null? #\a) => "#f\n"]
+   [(prim-apply null? 0) => "#f\n"]
+   [(prim-apply null? -10) => "#f\n"]
+   [(prim-apply null? 10) => "#f\n"])
+
+(add-tests-with-string-output "boolean?"
+   [(prim-apply boolean? #t) => "#t\n"]
+   [(prim-apply boolean? #f) => "#t\n"]
+   [(prim-apply boolean? 0) => "#f\n"]
+   [(prim-apply boolean? 1) => "#f\n"]
+   [(prim-apply boolean? -1) => "#f\n"]
+   [(prim-apply boolean? ()) => "#f\n"]
+   [(prim-apply boolean? #\a) => "#f\n"]
+   [(prim-apply boolean? (prim-apply boolean? 0)) => "#t\n"]
+   [(prim-apply boolean? (prim-apply fixnum? (prim-apply boolean? 0))) => "#t\n"])
+
+(add-tests-with-string-output "char?"
+   [(prim-apply char? #\a) => "#t\n"]
+   [(prim-apply char? #\Z) => "#t\n"]
+   [(prim-apply char? #\newline) => "#t\n"]
+   [(prim-apply char? #t) => "#f\n"]
+   [(prim-apply char? #f) => "#f\n"]
+   [(prim-apply char? ()) => "#f\n"]
+   [(prim-apply char? (prim-apply char? #t)) => "#f\n"]
+   [(prim-apply char? 0) => "#f\n"]
+   [(prim-apply char? 23870) => "#f\n"]
+   [(prim-apply char? -23789) => "#f\n"])

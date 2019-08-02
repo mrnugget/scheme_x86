@@ -16,13 +16,17 @@
   (apply fprintf (compile-port) (list "~a:" label))
   (newline (compile-port)))
 
+(define fixnum-tag 0)
 (define fixnum-shift 2)
+(define fixnum-mask 3)
 
 (define char-tag 15)
 (define char-shift 8)
+(define char-mask 255)
 
 (define bool-tag 31)
 (define bool-shift 8)
+(define bool-mask 255)
 
 (define empty-list 47) ;; 00101111 - 0x2f
 
@@ -52,7 +56,17 @@
       (emit "or $~s, %eax" char-tag)]
     [(char->fixnum)
       (emit "shr $~s, %eax" (- char-shift fixnum-shift))]
-    [(zero?) (emit-eax-eq? 0)]))
+    [(zero?) (emit-eax-eq? 0)]
+    [(null?) (emit-eax-eq? empty-list)]
+    [(fixnum?)
+     (emit "andl $~a, %eax" fixnum-mask)
+     (emit-eax-eq? fixnum-tag)]
+    [(boolean?)
+     (emit "andl $~a, %eax" bool-mask)
+     (emit-eax-eq? bool-tag)]
+    [(char?)
+     (emit "andl $~a, %eax" char-mask)
+     (emit-eax-eq? char-tag)]))
 
 (define (emit-eax-eq? val)
   (emit "cmpl $~a, %eax" val)
