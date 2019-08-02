@@ -46,7 +46,10 @@
   (case (prim-apply-fn expr)
     [(add1)
      (for-each emit-expr (reverse (prim-apply-args expr)))
-     (emit "addl $~a, %eax" (immediate-rep 1))]))
+     (emit "addl $~a, %eax" (immediate-rep 1))]
+    [(sub1)
+     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit "subl $~a, %eax" (immediate-rep 1))]))
 
 (define (emit-expr expr)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
