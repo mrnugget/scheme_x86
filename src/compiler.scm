@@ -50,48 +50,48 @@
 (define (prim-apply-arg-1 expr) (caddr expr))
 (define (prim-apply-arg-2 expr) (cadddr expr))
 
-(define (emit-prim-apply-args expr stack-index)
+(define (emit-prim-apply-args expr stack-index env)
   (for-each
-    (lambda (e) (emit-expr e stack-index))
+    (lambda (e) (emit-expr e stack-index env))
     (reverse (prim-apply-args expr))))
 
-(define (emit-prim-apply expr stack-index)
+(define (emit-prim-apply expr stack-index env)
   (case (prim-apply-fn expr)
     [(add1)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit "addl $~a, %eax" (immediate-rep 1))]
     [(sub1)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit "subl $~a, %eax" (immediate-rep 1))]
     [(fixnum->char)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit "shl $~s, %eax" (- char-shift fixnum-shift))
      (emit "or $~s, %eax" char-tag)]
     [(char->fixnum)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit "shr $~s, %eax" (- char-shift fixnum-shift))]
     [(zero?)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit-eax-eq? 0)]
     [(null?)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit-eax-eq? empty-list)]
     [(fixnum?)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit "andl $~a, %eax" fixnum-mask)
      (emit-eax-eq? fixnum-tag)]
     [(boolean?)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit "andl $~a, %eax" bool-mask)
      (emit-eax-eq? bool-tag)]
     [(char?)
-     (emit-prim-apply-args expr stack-index)
+     (emit-prim-apply-args expr stack-index env)
      (emit "andl $~a, %eax" char-mask)
      (emit-eax-eq? char-tag)]
     [(+)
-     (emit-expr (prim-apply-arg-1 expr) stack-index)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, ~a(%esp)" stack-index)
-     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize))
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "addl ~a(%esp), %eax" stack-index)]))
 
 (define (emit-eax-eq? val)
@@ -101,16 +101,20 @@
   (emit "sall $~a, %eax" bool-shift)
   (emit "orl $~a, %eax" bool-tag))
 
-(define (emit-expr expr stack-index)
+(define (new-env) '())
+(define (lookup ident env) (assoc ident env))
+(define (extend-env ident stack-index env) (cons (cons ident stack-index) env))
+
+(define (emit-expr expr stack-index env)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
-        [(prim-apply? expr) (emit-prim-apply expr stack-index)]
+        [(prim-apply? expr) (emit-prim-apply expr stack-index env)]
         [else (emit "movl $99, %eax")]))
 
-(define (emit-program expr)
+(define (emit-program expr env)
   (emit ".text")
   (emit ".p2align 4,,15")
   (emit ".globl scheme_entry")
   (emit ".type scheme_entry, @function")
   (emit-label "scheme_entry")
-  (emit-expr expr (- wordsize))
+  (emit-expr expr (- wordsize) env)
   (emit "ret"))

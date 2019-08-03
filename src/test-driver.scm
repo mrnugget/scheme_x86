@@ -22,7 +22,7 @@
 (define (compile-program expr)
   (let ([p (open-output-file "emitted.s" 'replace)])
     (parameterize ([compile-port p])
-      (emit-program expr))
+      (emit-program expr (new-env)))
     (close-output-port p)))
 
 (define (run expr)
