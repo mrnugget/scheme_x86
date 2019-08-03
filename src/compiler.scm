@@ -92,8 +92,7 @@
      (emit-expr (prim-apply-arg-1 expr) stack-index)
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize))
-     (emit "addl ~a(%esp), %eax" stack-index)
-     ]))
+     (emit "addl ~a(%esp), %eax" stack-index)]))
 
 (define (emit-eax-eq? val)
   (emit "cmpl $~a, %eax" val)
