@@ -50,37 +50,42 @@
 (define (prim-apply-arg-1 expr) (caddr expr))
 (define (prim-apply-arg-2 expr) (cadddr expr))
 
+(define (emit-prim-apply-args expr stack-index)
+  (for-each
+    (lambda (e) (emit-expr e stack-index))
+    (reverse (prim-apply-args expr))))
+
 (define (emit-prim-apply expr stack-index)
   (case (prim-apply-fn expr)
     [(add1)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit "addl $~a, %eax" (immediate-rep 1))]
     [(sub1)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit "subl $~a, %eax" (immediate-rep 1))]
     [(fixnum->char)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit "shl $~s, %eax" (- char-shift fixnum-shift))
      (emit "or $~s, %eax" char-tag)]
     [(char->fixnum)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit "shr $~s, %eax" (- char-shift fixnum-shift))]
     [(zero?)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit-eax-eq? 0)]
     [(null?)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit-eax-eq? empty-list)]
     [(fixnum?)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit "andl $~a, %eax" fixnum-mask)
      (emit-eax-eq? fixnum-tag)]
     [(boolean?)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit "andl $~a, %eax" bool-mask)
      (emit-eax-eq? bool-tag)]
     [(char?)
-     (for-each emit-expr (reverse (prim-apply-args expr)))
+     (emit-prim-apply-args expr stack-index)
      (emit "andl $~a, %eax" char-mask)
      (emit-eax-eq? char-tag)]
     [(+)
