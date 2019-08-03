@@ -101,14 +101,45 @@
   (emit "sall $~a, %eax" bool-shift)
   (emit "orl $~a, %eax" bool-tag))
 
+(define (variable? expr) (symbol? expr))
+(define (let? expr) (eq? 'let (car expr)))
+(define (let-bindings expr) (cadr expr))
+(define (let-body expr) (caddr expr))
+(define (binding-ident b) (car b))
+(define (binding-value b) (cadr b))
+
 (define (new-env) '())
 (define (lookup ident env) (assoc ident env))
 (define (extend-env ident stack-index env) (cons (cons ident stack-index) env))
 
+(define (emit-let bindings body stack-index env)
+  ; (display (format "\n(emit-let bindings=~a body=~a stack-index=~a env=~a)\n" bindings body stack-index env))
+  (let loop ([b* bindings]
+             [e env]
+             [stack-index stack-index])
+    (if (null? b*)
+        (emit-expr body stack-index e)
+        (let ((b (car b*)))
+          (emit-expr (binding-value b) stack-index env)
+          (emit "movl %eax, ~a(%esp)" stack-index)
+          (loop (cdr b*)
+             (extend-env (binding-ident b) stack-index e)
+             (- stack-index wordsize))))))
+
 (define (emit-expr expr stack-index env)
+  ; (display (format "\n(emit-expr expr=~a stack-index=~a env=~a)\n" expr stack-index env))
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
+        [(variable? expr)
+         (let ([p (lookup expr env)])
+           (if (pair? p)
+               (emit "movl ~a(%esp), %eax" (cdr p))
+               (error 'lookup (format "not found in env: ~a" expr))))]
+        [(let? expr)
+         (emit-let (let-bindings expr) (let-body expr) stack-index env)]
         [(prim-apply? expr) (emit-prim-apply expr stack-index env)]
-        [else (emit "movl $99, %eax")]))
+        [else (begin
+                (display (format "unrecognized form: ~a\n" expr))
+                (emit "movl $99, %eax"))]))
 
 (define (emit-program expr env)
   (emit ".text")
