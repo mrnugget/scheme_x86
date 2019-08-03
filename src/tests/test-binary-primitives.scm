@@ -26,5 +26,4 @@
   [(prim-apply + (prim-apply + -1 -2) 3) => "0\n"]
   [(prim-apply + (prim-apply + -1 -2) -3) => "-6\n"]
   [(prim-apply + (prim-apply + (prim-apply + (prim-apply + (prim-apply + (prim-apply + (prim-apply + (prim-apply + 1 2) 3) 4) 5) 6) 7) 8) 9) => "45\n"]
-  [(prim-apply + 1 (prim-apply + 2 (prim-apply + 3 (prim-apply + 4 (prim-apply + 5 (prim-apply + 6 (prim-apply + 7 (prim-apply + 8 9)))))))) => "45\n"]
-  )
+  [(prim-apply + 1 (prim-apply + 2 (prim-apply + 3 (prim-apply + 4 (prim-apply + 5 (prim-apply + 6 (prim-apply + 7 (prim-apply + 8 9)))))))) => "45\n"])
