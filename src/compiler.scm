@@ -126,6 +126,30 @@
              (extend-env (binding-ident b) stack-index e)
              (- stack-index wordsize))))))
 
+(define (if? expr) (eq? 'if (car expr)))
+(define (if-condition expr) (cadr expr))
+(define (if-consequence expr) (caddr expr))
+(define (if-alternative expr) (cadddr expr))
+
+(define label-count 0)
+
+(define (unique-label)
+  (let ([l (format "label_~a" label-count)])
+    (set! label-count (+ label-count 1))
+    l))
+
+(define (emit-if expr stack-index env)
+  (let ([alternative-label (unique-label)]
+        [end-label (unique-label)])
+    (emit-expr (if-condition expr) stack-index env)
+    (emit "cmpl $~s, %eax" (immediate-rep #f))
+    (emit "je ~a" alternative-label)
+    (emit-expr (if-consequence expr) stack-index env )
+    (emit "jmp ~a" end-label)
+    (emit-label alternative-label)
+    (emit-expr (if-alternative expr) stack-index env)
+    (emit-label end-label)))
+
 (define (emit-expr expr stack-index env)
   ; (display (format "\n(emit-expr expr=~a stack-index=~a env=~a)\n" expr stack-index env))
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
@@ -136,6 +160,7 @@
                (error 'lookup (format "not found in env: ~a" expr))))]
         [(let? expr)
          (emit-let (let-bindings expr) (let-body expr) stack-index env)]
+        [(if? expr) (emit-if expr stack-index env)]
         [(prim-apply? expr) (emit-prim-apply expr stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
