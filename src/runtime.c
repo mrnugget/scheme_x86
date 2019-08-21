@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "runtime.h"
 
 #define fixnum_mask       3
@@ -15,9 +16,9 @@
 
 #define empty_list 47
 
-int main(int argc, char** argv) {
-    int val = scheme_entry();
+#define heap_size 0x400000
 
+void print_value(int val) {
     if ((val & fixnum_mask) == fixnum_tag){
         printf("%d\n", val >> fixnum_shift);
     } else if ((val & boolean_mask) == boolean_tag){
@@ -40,6 +41,14 @@ int main(int argc, char** argv) {
     } else {
         printf("unrecognized value: %d\n", val);
     }
+}
 
+int main(int argc, char** argv) {
+    void* heap = aligned_alloc(8, heap_size);
+
+    int val = scheme_entry(heap);
+    print_value(val);
+
+    free(heap);
     return 0;
 }
