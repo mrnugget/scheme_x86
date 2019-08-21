@@ -172,5 +172,7 @@
   (emit ".globl scheme_entry")
   (emit ".type scheme_entry, @function")
   (emit-label "scheme_entry")
+  ; Save heap pointer
+  (emit "movl 16(%esp), %esi")
   (emit-expr expr (- wordsize) env)
   (emit "ret"))
