@@ -131,7 +131,7 @@
 (define (variable? expr) (symbol? expr))
 (define (let? expr) (eq? 'let (car expr)))
 (define (let-bindings expr) (cadr expr))
-(define (let-body expr) (caddr expr))
+(define (let-body expr) (cddr expr))
 (define (binding-ident b) (car b))
 (define (binding-value b) (cadr b))
 
@@ -145,7 +145,7 @@
              [e env]
              [stack-index stack-index])
     (if (null? b*)
-        (emit-expr body stack-index e)
+        (for-each (lambda (body-expr) (emit-expr body-expr stack-index e)) body)
         (let ((b (car b*)))
           (emit-expr (binding-value b) stack-index env)
           (emit "movl %eax, ~a(%esp)" stack-index)
