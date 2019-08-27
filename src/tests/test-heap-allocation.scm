@@ -17,4 +17,16 @@
   [(let ([x (prim-apply cons 1 2)])
      (prim-apply set-car! x 99)
      (prim-apply pair? x))
+   => "#t\n"]
+  [(let ([x (prim-apply cons 1 2)])
+     (prim-apply set-cdr x 33)
+     x)
+   => "(1 . 33)\n"]
+  [(let ([x (prim-apply cons 1 2)])
+     (prim-apply set-cdr x 33)
+     (prim-apply cdr x))
+   => "33\n"]
+  [(let ([x (prim-apply cons 1 2)])
+     (prim-apply set-cdr x 33)
+     (prim-apply pair? x))
    => "#t\n"])
