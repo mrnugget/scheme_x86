@@ -29,7 +29,9 @@
 (define bool-mask 255)
 
 (define empty-list 47) ;; 00101111 - 0x2f
-(define pair-tag 1)
+
+(define object-mask 7)
+(define object-tag-pair 1)
 
 (define wordsize 4)
 
@@ -105,8 +107,18 @@
      (emit "movl %eax, 0(%esi)")
      ;; save pointer and tag it, then increment heap ptr
      (emit "movl %esi, %eax")
-     (emit "orl $~a, %eax" pair-tag)
-     (emit "addl $~a, %esi" (* 2 wordsize))]))
+     (emit "orl $~a, %eax" object-tag-pair)
+     (emit "addl $~a, %esi" (* 2 wordsize))]
+    [(car)
+     (emit-prim-apply-args expr stack-index env)
+     (emit "movl -1(%eax), %eax")]
+    [(cdr)
+     (emit-prim-apply-args expr stack-index env)
+     (emit "movl 3(%eax), %eax")]
+    [(pair?)
+     (emit-prim-apply-args expr stack-index env)
+     (emit "andl $~a, %eax" object-mask)
+     (emit-eax-eq? object-tag-pair)]))
 
 
 (define (emit-eax-eq? val)
