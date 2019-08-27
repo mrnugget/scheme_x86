@@ -101,14 +101,12 @@
      ;; store cdr
      (emit "movl %eax, ~a(%esi)" wordsize)
      ;; store car
-     ;; TODO: this can be moved and get rid of `mov` to %eax?
      (emit "movl ~a(%esp), %eax" stack-index)
      (emit "movl %eax, 0(%esi)")
      ;; save pointer and tag it, then increment heap ptr
      (emit "movl %esi, %eax")
      (emit "orl $~a, %eax" pair-tag)
-     (emit "addl $~a, %esi" (* 2 wordsize))
-     ]))
+     (emit "addl $~a, %esi" (* 2 wordsize))]))
 
 
 (define (emit-eax-eq? val)
