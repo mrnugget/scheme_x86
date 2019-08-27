@@ -17,7 +17,7 @@
 #define empty_list 47
 
 #define object_mask     7 // Look at 3 bits
-#define object_pair_tag 1
+#define object_tag_pair 1
 
 #define heap_size 0x400000
 
@@ -41,23 +41,22 @@ void print_value(int val) {
         else if (c == '\r') { printf("#\\return"); }
         else if (c == ' ')  { printf("#\\space"); }
         else                { printf("#\\%c", c); }
-    } else if ((val & object_mask) == object_pair_tag) {
-        int* ptr = (int*)(val - object_pair_tag);
+    } else if ((val & object_mask) == object_tag_pair) {
+        int* ptr = (int*)(val - object_tag_pair);
         if (ptr == NULL) {
             printf("()");
             return;
         }
 
-        // either a list or a dotted pair
         int car = ptr[0];
         int cdr = ptr[1];
+
         putchar('(');
         print_value(car);
 
-        // show additional space-separated elems
-        while ((cdr & object_mask) == object_pair_tag) {
-            ptr = (int*)(cdr - object_pair_tag);
-            if(ptr == NULL) break;
+        while ((cdr & object_mask) == object_tag_pair) {
+            ptr = (int*)(cdr - object_tag_pair);
+            if (ptr == NULL) break;
 
             car = ptr[0];
             cdr = ptr[1];
@@ -65,8 +64,7 @@ void print_value(int val) {
             print_value(car);
         }
 
-        // show dotted pair notation if relevant
-        if((cdr & object_mask) != object_pair_tag) {
+        if ((cdr & object_mask) != object_tag_pair) {
             printf(" . ");
             print_value(cdr);
         }
