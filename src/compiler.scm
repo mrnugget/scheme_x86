@@ -125,7 +125,7 @@
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "movl ~a(%esp), %edx" stack-index)
      (emit "movl %eax, ~a(%edx)" (- object-tag-pair))]
-    [(set-cdr)
+    [(set-cdr!)
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
