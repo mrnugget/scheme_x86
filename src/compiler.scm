@@ -29,6 +29,7 @@
 (define bool-mask 255)
 
 (define empty-list 47) ;; 00101111 - 0x2f
+(define pair-tag 1)
 
 (define wordsize 4)
 
@@ -92,7 +93,23 @@
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
-     (emit "addl ~a(%esp), %eax" stack-index)]))
+     (emit "addl ~a(%esp), %eax" stack-index)]
+    [(cons)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "movl %eax, ~a(%esp)" stack-index)
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
+     ;; store cdr
+     (emit "movl %eax, ~a(%esi)" wordsize)
+     ;; store car
+     ;; TODO: this can be moved and get rid of `mov` to %eax?
+     (emit "movl ~a(%esp), %eax" stack-index)
+     (emit "movl %eax, 0(%esi)")
+     ;; save pointer and tag it, then increment heap ptr
+     (emit "movl %esi, %eax")
+     (emit "orl $~a, %eax" pair-tag)
+     (emit "addl $~a, %esi" (* 2 wordsize))
+     ]))
+
 
 (define (emit-eax-eq? val)
   (emit "cmpl $~a, %eax" val)
@@ -172,7 +189,21 @@
   (emit ".globl scheme_entry")
   (emit ".type scheme_entry, @function")
   (emit-label "scheme_entry")
+
+  ; Save registers
+  (emit "push %esi")
+  (emit "push %edi")
+  (emit "push %edx")
+
   ; Save heap pointer
   (emit "movl 16(%esp), %esi")
+
+  ; Compile!
   (emit-expr expr (- wordsize) env)
+
+  ; Restore registers
+  (emit "pop %edx")
+  (emit "pop %edi")
+  (emit "pop %esi")
+
   (emit "ret"))
