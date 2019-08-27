@@ -118,7 +118,13 @@
     [(pair?)
      (emit-prim-apply-args expr stack-index env)
      (emit "andl $~a, %eax" object-mask)
-     (emit-eax-eq? object-tag-pair)]))
+     (emit-eax-eq? object-tag-pair)]
+    [(set-car!)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "movl %eax, ~a(%esp)" stack-index)
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
+     (emit "movl ~a(%esp), %edx" stack-index)
+     (emit "movl %eax, ~a(%edx)" (- object-tag-pair))]))
 
 
 (define (emit-eax-eq? val)
