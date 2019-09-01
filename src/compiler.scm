@@ -118,10 +118,7 @@
     [(cdr)
      (emit-prim-apply-args expr stack-index env)
      (emit "movl 3(%eax), %eax")]
-    [(pair?)
-     (emit-prim-apply-args expr stack-index env)
-     (emit "andl $~a, %eax" object-mask)
-     (emit-eax-eq? object-tag-pair)]
+    [(pair?) (emit-object-tag-eq? expr stack-index env object-tag-pair)]
     [(set-car!)
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, ~a(%esp)" stack-index)
@@ -134,13 +131,9 @@
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "movl ~a(%esp), %edx" stack-index)
      (emit "movl %eax, ~a(%edx)" (- wordsize object-tag-pair))]
-    [(string?)
-     (emit-prim-apply-args expr stack-index env)
-     (emit "andl $~a, %eax" object-mask)
-     (emit-eax-eq? object-tag-string)]
+    [(string?) (emit-object-tag-eq? expr stack-index env object-tag-string)]
     [(make-string)
-     (emit-expr (prim-apply-arg-1 expr) stack-index env)
-     (emit "shr $~s, %eax" fixnum-shift)
+     (emit-fixnum-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, 0(%esi)") ;; Store length at beginning of next memory slot
      (emit "movl %eax, %ecx")
      (emit "movl %esi, %eax")
@@ -157,8 +150,7 @@
      (emit "subl $~a, %eax" object-tag-string)
      (emit "addl $~a, %eax" wordsize) ;; skip `length`
      (emit "movl %eax, ~a(%esp)" stack-index)
-     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
-     (emit "shr $~a, %eax" fixnum-shift)
+     (emit-fixnum-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "addl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-3 expr) (- stack-index wordsize) env)
      (emit "shr $~a, %eax" char-shift)
@@ -170,15 +162,13 @@
      (emit "subl $~a, %eax" object-tag-string)
      (emit "addl $~a, %eax" wordsize) ;; skip `length`
      (emit "movl %eax, ~a(%esp)" stack-index)
-     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
-     (emit "shr $~a, %eax" fixnum-shift)
+     (emit-fixnum-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "addl ~a(%esp), %eax" stack-index)
      (emit "movzb (%eax), %eax")
      (emit "shl $~s, %eax" char-shift)
      (emit "or $~s, %eax" char-tag)]
     [(make-vector)
-     (emit-expr (prim-apply-arg-1 expr) stack-index env)
-     (emit "shr $~s, %eax" fixnum-shift)
+     (emit-fixnum-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, 0(%esi)") ;; Store length at beginning of next memory slot
      (emit "movl %eax, %ecx")
      (emit "sall $2, %ecx")
@@ -187,17 +177,13 @@
      (emit "addl $11, %ecx")
      (emit "andl $-8, %ecx")
      (emit "addl %ecx, %esi")]
-    [(vector?)
-     (emit-prim-apply-args expr stack-index env)
-     (emit "andl $~a, %eax" object-mask)
-     (emit-eax-eq? object-tag-vector)]
+    [(vector?) (emit-object-tag-eq? expr stack-index env object-tag-vector)]
     [(vector-set!)
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "subl $~a, %eax" object-tag-vector) ;; Pointer to vector is in %eax, untag it
      (emit "addl $~a, %eax" wordsize)          ;; Skip `length` by increasing pointer
      (emit "movl %eax, ~a(%esp)" stack-index)  ;; Save pointer on stack
-     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
-     (emit "shr $~a, %eax" fixnum-shift)
+     (emit-fixnum-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "sall $2, %eax")                    ;; Multiply `length` by four
      (emit "addl %eax, ~a(%esp)" stack-index)  ;; Add it to the pointer saved at ~a(%esp)
      (emit "movl ~a(%esp), %ecx" stack-index)  ;; Move pointer from ~a(%esp) to %ecx
@@ -209,12 +195,19 @@
      (emit "subl $~a, %eax" object-tag-vector)
      (emit "addl $~a, %eax" wordsize)
      (emit "movl %eax, ~a(%esp)" stack-index)
-     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
-     (emit "shr $~a, %eax" fixnum-shift)
+     (emit-fixnum-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "sall $2, %eax")                    ;; Multiply `length` by four
      (emit "addl ~a(%esp), %eax" stack-index)
-     (emit "movl (%eax), %eax")]
-    ))
+     (emit "movl (%eax), %eax")]))
+
+(define (emit-object-tag-eq? expr stack-index env tag)
+  (emit-prim-apply-args expr stack-index env)
+  (emit "andl $~a, %eax" object-mask)
+  (emit-eax-eq? tag))
+
+(define (emit-fixnum-expr expr stack-index env)
+  (emit-expr expr stack-index env)
+  (emit "shr $~a, %eax" fixnum-shift))
 
 (define (emit-eax-eq? val)
   (emit "cmpl $~a, %eax" val)
