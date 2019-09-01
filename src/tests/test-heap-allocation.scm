@@ -42,5 +42,11 @@
   [(let ([s (prim-apply make-string 1)])
     (prim-apply string-set! s 0 #\z)
     s)
-   => "\"z\"\n"])
+   => "\"z\"\n"]
+  [(let ([s (prim-apply make-string 3)])
+    (prim-apply string-set! s 0 #\a)
+    (prim-apply string-set! s 1 #\b)
+    (prim-apply string-set! s 2 #\c)
+    s)
+   => "\"abc\"\n"])
 

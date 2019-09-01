@@ -78,11 +78,12 @@ void print_value(int val) {
         }
 
         int length = *ptr;
-        ptr++;
+        char *str = (char *)(ptr + 1);
 
         putchar('"');
         for (int i = 0; i < length; i++) {
-            putchar(*ptr);
+            putchar(*str);
+            str++;
         }
         putchar('"');
     } else {
