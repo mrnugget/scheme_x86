@@ -53,6 +53,7 @@
 (define (prim-apply-args expr) (cddr expr))
 (define (prim-apply-arg-1 expr) (caddr expr))
 (define (prim-apply-arg-2 expr) (cadddr expr))
+(define (prim-apply-arg-3 expr) (cadddr (cdr expr)))
 
 (define (emit-prim-apply-args expr stack-index env)
   (for-each
@@ -149,7 +150,34 @@
      ;; then bitwise-AND it with -8
      (emit "addl $11, %ecx")
      (emit "andl $-8, %ecx")
-     (emit "addl %ecx, %esi")]))
+     (emit "addl %ecx, %esi")]
+    [(string-set!)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-string)
+     (emit "addl $~a, %eax" wordsize) ;; skip `length`
+     (emit "movl %eax, ~a(%esp)" stack-index)
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
+     (emit "shr $~a, %eax" fixnum-shift)
+     (emit "addl %eax, ~a(%esp)" stack-index)
+     (emit-expr (prim-apply-arg-3 expr) (- stack-index wordsize) env)
+     (emit "shr $~a, %eax" char-shift)
+     (emit "movl ~a(%esp), %ecx" stack-index) ;; Move pointer from ~a(%esp) to %ecx
+     (emit "movb %al, (%ecx)") ;; Move byte from last byte of %eax to location pointed to by %ecx
+     (emit "mov $0, %eax")]
+    ))
+
+  ;; (emit-expr si env index)
+  ;; (emit "  shr $~s, %eax" fxshift)
+  ;; (emit "  add $~s, %eax" wordsize)
+  ;; (emit-stack-save si)
+  ;; (emit-expr (next-stack-index si) env value)
+  ;; (emit "  shr $~s, %eax" charshift)
+  ;; (emit-stack-save (next-stack-index si))
+  ;; (emit-expr (next-stack-index (next-stack-index si)) env string)
+  ;; (emit "  add ~s(%esp), %eax" si)
+  ;; (emit "  mov ~s(%esp), %edx" (next-stack-index si))
+  ;; (emit "  movb %dl, ~s(%eax)" (- stringtag))
+  ;; (emit "  mov $0, %eax"))
 
 
 (define (emit-eax-eq? val)

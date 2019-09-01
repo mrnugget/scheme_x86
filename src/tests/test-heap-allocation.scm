@@ -38,5 +38,9 @@
   [(prim-apply string? 1287) => "#f\n"]
   [(prim-apply string? ()) => "#f\n"]
   [(prim-apply string? #t) => "#f\n"]
-  [(prim-apply string? #f) => "#f\n"])
+  [(prim-apply string? #f) => "#f\n"]
+  [(let ([s (prim-apply make-string 1)])
+    (prim-apply string-set! s 0 #\z)
+    s)
+   => "\"z\"\n"])
 

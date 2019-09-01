@@ -76,9 +76,14 @@ void print_value(int val) {
             printf("()");
             return;
         }
-        /* int length = *ptr; */
+
+        int length = *ptr;
+        ptr++;
 
         putchar('"');
+        for (int i = 0; i < length; i++) {
+            putchar(*ptr);
+        }
         putchar('"');
     } else {
         printf("unrecognized value: %d", val);
