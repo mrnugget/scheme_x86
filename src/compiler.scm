@@ -32,6 +32,7 @@
 
 (define object-mask 7)
 (define object-tag-pair 1)
+(define object-tag-string 3)
 
 (define wordsize 4)
 
@@ -130,7 +131,25 @@
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "movl ~a(%esp), %edx" stack-index)
-     (emit "movl %eax, ~a(%edx)" (- wordsize object-tag-pair))]))
+     (emit "movl %eax, ~a(%edx)" (- wordsize object-tag-pair))]
+    [(string?)
+     (emit-prim-apply-args expr stack-index env)
+     (emit "andl $~a, %eax" object-mask)
+     (emit-eax-eq? object-tag-string)]
+    [(make-string)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "shr $~s, %eax" fixnum-shift)
+     (emit "movl %eax, 0(%esi)") ;; Store length at beginning of next memory slot
+     (emit "movl %eax, %ecx")
+     (emit "movl %esi, %eax")
+     (emit "orl $~a, %eax" object-tag-string)
+     ;; Add 7+4 to length in %ecx
+     ;; * 7 to align to multiple of 8
+     ;; * 4 because that's the "length" stored at beginning of memory
+     ;; then bitwise-AND it with -8
+     (emit "addl $11, %ecx")
+     (emit "andl $-8, %ecx")
+     (emit "addl %ecx, %esi")]))
 
 
 (define (emit-eax-eq? val)

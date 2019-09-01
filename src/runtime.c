@@ -16,8 +16,9 @@
 
 #define empty_list 47
 
-#define object_mask     7 // Look at 3 bits
-#define object_tag_pair 1
+#define object_mask       7 // Look at 3 bits
+#define object_tag_pair   1
+#define object_tag_string 3
 
 #define heap_size 0x400000
 
@@ -69,6 +70,16 @@ void print_value(int val) {
             print_value(cdr);
         }
         putchar(')');
+    } else if ((val & object_mask) == object_tag_string) {
+        int* ptr = (int*)(val - object_tag_string);
+        if (ptr == NULL) {
+            printf("()");
+            return;
+        }
+        /* int length = *ptr; */
+
+        putchar('"');
+        putchar('"');
     } else {
         printf("unrecognized value: %d", val);
     }

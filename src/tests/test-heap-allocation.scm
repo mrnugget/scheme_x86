@@ -31,3 +31,7 @@
      (prim-apply set-cdr! x 33)
      (prim-apply pair? x))
    => "#t\n"])
+
+(add-tests-with-string-output "strings"
+  [(prim-apply string? (prim-apply make-string 99)) => "#t\n"]
+  [(prim-apply make-string 0) => "\"\"\n"])
