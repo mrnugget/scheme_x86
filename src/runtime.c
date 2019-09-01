@@ -18,6 +18,7 @@
 
 #define object_mask       7 // Look at 3 bits
 #define object_tag_pair   1
+#define object_tag_vector 2
 #define object_tag_string 3
 
 #define heap_size 0x400000
@@ -86,6 +87,23 @@ void print_value(int val) {
             str++;
         }
         putchar('"');
+    } else if ((val & object_mask) == object_tag_vector) {
+        int* ptr = (int*)(val - object_tag_vector);
+        if (ptr == NULL) {
+            printf("()");
+            return;
+        }
+
+        int length = *ptr;
+        int *elements = (int *)(ptr + 1);
+
+        printf("#(");
+        for (int i = 0; i < length; i++) {
+            print_value(*elements);
+            if (i + 1 != length) { putchar(' '); }
+            elements++;
+        }
+        putchar(')');
     } else {
         printf("unrecognized value: %d", val);
     }

@@ -32,6 +32,7 @@
 
 (define object-mask 7)
 (define object-tag-pair 1)
+(define object-tag-vector 2)
 (define object-tag-string 3)
 
 (define wordsize 4)
@@ -175,6 +176,44 @@
      (emit "movzb (%eax), %eax")
      (emit "shl $~s, %eax" char-shift)
      (emit "or $~s, %eax" char-tag)]
+    [(make-vector)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "shr $~s, %eax" fixnum-shift)
+     (emit "movl %eax, 0(%esi)") ;; Store length at beginning of next memory slot
+     (emit "movl %eax, %ecx")
+     (emit "sall $2, %ecx")
+     (emit "movl %esi, %eax")
+     (emit "orl $~a, %eax" object-tag-vector)
+     (emit "addl $11, %ecx")
+     (emit "andl $-8, %ecx")
+     (emit "addl %ecx, %esi")]
+    [(vector?)
+     (emit-prim-apply-args expr stack-index env)
+     (emit "andl $~a, %eax" object-mask)
+     (emit-eax-eq? object-tag-vector)]
+    [(vector-set!)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-vector) ;; Pointer to vector is in %eax, untag it
+     (emit "addl $~a, %eax" wordsize)          ;; Skip `length` by increasing pointer
+     (emit "movl %eax, ~a(%esp)" stack-index)  ;; Save pointer on stack
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
+     (emit "shr $~a, %eax" fixnum-shift)
+     (emit "sall $2, %eax")                    ;; Multiply `length` by four
+     (emit "addl %eax, ~a(%esp)" stack-index)  ;; Add it to the pointer saved at ~a(%esp)
+     (emit "movl ~a(%esp), %ecx" stack-index)  ;; Move pointer from ~a(%esp) to %ecx
+     (emit-expr (prim-apply-arg-3 expr) (- stack-index wordsize) env)
+     (emit "movl %eax, (%ecx)")                ;; Move pointer in %eax to location pointed to by %ecx
+     (emit "mov $0, %eax")]
+    [(vector-ref)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-vector)
+     (emit "addl $~a, %eax" wordsize)
+     (emit "movl %eax, ~a(%esp)" stack-index)
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
+     (emit "shr $~a, %eax" fixnum-shift)
+     (emit "sall $2, %eax")                    ;; Multiply `length` by four
+     (emit "addl ~a(%esp), %eax" stack-index)
+     (emit "movl (%eax), %eax")]
     ))
 
 (define (emit-eax-eq? val)

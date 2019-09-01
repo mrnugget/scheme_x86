@@ -58,6 +58,54 @@
     (prim-apply string-set! s 1 #\b)
     (prim-apply string-set! s 2 #\c)
     (prim-apply string-ref s 2))
-   => "#\\c\n"]
-  )
+   => "#\\c\n"])
 
+(add-tests-with-string-output "vectors"
+  [(prim-apply make-vector 0) => "#()\n"]
+  [(prim-apply vector? (prim-apply make-vector 0)) => "#t\n"]
+  [(prim-apply vector? 1287) => "#f\n"]
+  [(prim-apply vector? ()) => "#f\n"]
+  [(prim-apply vector? #t) => "#f\n"]
+  [(prim-apply vector? #f) => "#f\n"]
+  [(let ([v (prim-apply make-vector 1)])
+    (prim-apply vector-set! v 0 999)
+    v)
+   => "#(999)\n"]
+  [(let ([v (prim-apply make-vector 3)])
+    (prim-apply vector-set! v 0 999)
+    (prim-apply vector-set! v 1 777)
+    (prim-apply vector-set! v 2 666)
+    v)
+   => "#(999 777 666)\n"]
+  [(let ([v (prim-apply make-vector 1)])
+    (prim-apply vector-set! v 0 999)
+    (prim-apply vector-ref v 0))
+   => "999\n"]
+  [(let ([v (prim-apply make-vector 3)])
+    (prim-apply vector-set! v 0 999)
+    (prim-apply vector-set! v 1 777)
+    (prim-apply vector-set! v 2 666)
+    (prim-apply vector-ref v 2))
+   => "666\n"]
+  [(let ([v (prim-apply make-vector 3)]
+         [s (prim-apply make-string 3)])
+    (prim-apply string-set! s 0 #\a)
+    (prim-apply string-set! s 1 #\b)
+    (prim-apply string-set! s 2 #\c)
+    (prim-apply vector-set! v 0 (prim-apply cons 1 2))
+    (prim-apply vector-set! v 1 (prim-apply cons 3 4))
+    (prim-apply vector-set! v 2 s)
+    v)
+   => "#((1 . 2) (3 . 4) \"abc\")\n"]
+  [(let ([v1 (prim-apply make-vector 3)]
+         [v2 (prim-apply make-vector 1)]
+         [s (prim-apply make-string 3)])
+    (prim-apply string-set! s 0 #\a)
+    (prim-apply string-set! s 1 #\b)
+    (prim-apply string-set! s 2 #\c)
+    (prim-apply vector-set! v1 0 (prim-apply cons 1 2))
+    (prim-apply vector-set! v1 1 (prim-apply cons 3 4))
+    (prim-apply vector-set! v1 2 s)
+    (prim-apply vector-set! v2 0 v1)
+    v2)
+   => "#(#((1 . 2) (3 . 4) \"abc\"))\n"])
