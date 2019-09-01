@@ -164,6 +164,17 @@
      (emit "movl ~a(%esp), %ecx" stack-index) ;; Move pointer from ~a(%esp) to %ecx
      (emit "movb %al, (%ecx)") ;; Move byte from last byte of %eax to location pointed to by %ecx
      (emit "mov $0, %eax")]
+    [(string-ref)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-string)
+     (emit "addl $~a, %eax" wordsize) ;; skip `length`
+     (emit "movl %eax, ~a(%esp)" stack-index)
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
+     (emit "shr $~a, %eax" fixnum-shift)
+     (emit "addl ~a(%esp), %eax" stack-index)
+     (emit "movzb (%eax), %eax")
+     (emit "shl $~s, %eax" char-shift)
+     (emit "or $~s, %eax" char-tag)]
     ))
 
   ;; (emit-expr si env index)
