@@ -33,5 +33,10 @@
    => "#t\n"])
 
 (add-tests-with-string-output "strings"
+  [(prim-apply make-string 0) => "\"\"\n"]
   [(prim-apply string? (prim-apply make-string 99)) => "#t\n"]
-  [(prim-apply make-string 0) => "\"\"\n"])
+  [(prim-apply string? 1287) => "#f\n"]
+  [(prim-apply string? ()) => "#f\n"]
+  [(prim-apply string? #t) => "#f\n"]
+  [(prim-apply string? #f) => "#f\n"])
+
