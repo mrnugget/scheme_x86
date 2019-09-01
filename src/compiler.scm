@@ -177,20 +177,6 @@
      (emit "or $~s, %eax" char-tag)]
     ))
 
-  ;; (emit-expr si env index)
-  ;; (emit "  shr $~s, %eax" fxshift)
-  ;; (emit "  add $~s, %eax" wordsize)
-  ;; (emit-stack-save si)
-  ;; (emit-expr (next-stack-index si) env value)
-  ;; (emit "  shr $~s, %eax" charshift)
-  ;; (emit-stack-save (next-stack-index si))
-  ;; (emit-expr (next-stack-index (next-stack-index si)) env string)
-  ;; (emit "  add ~s(%esp), %eax" si)
-  ;; (emit "  mov ~s(%esp), %edx" (next-stack-index si))
-  ;; (emit "  movb %dl, ~s(%eax)" (- stringtag))
-  ;; (emit "  mov $0, %eax"))
-
-
 (define (emit-eax-eq? val)
   (emit "cmpl $~a, %eax" val)
   (emit "movl $0, %eax")
