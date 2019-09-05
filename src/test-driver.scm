@@ -19,14 +19,14 @@
                [(eof-object? c) (void)]
                [else (display c) (f)]))))))))
 
-(define (compile-program expr)
-  (let ([p (open-output-file "emitted.s" 'replace)])
+(define (compile-program-to-file expr filename)
+  (let ([p (open-output-file filename 'replace)])
     (parameterize ([compile-port p])
-      (emit-program expr (new-env)))
+      (compile-program expr))
     (close-output-port p)))
 
 (define (run expr)
-  (compile-program expr)
+  (compile-program-to-file expr "emitted.s")
   (build)
   (execute)
   (get-string))

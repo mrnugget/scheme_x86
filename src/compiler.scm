@@ -425,3 +425,6 @@
 
 (define (precompile program)
   (precompile-add-labels (car (precompile-annotate-free-vars program '()))))
+
+(define (compile-program expr)
+ (emit-program expr (new-env)))
