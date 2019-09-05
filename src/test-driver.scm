@@ -35,16 +35,30 @@
 
 (define-syntax add-tests-with-string-output
   (syntax-rules (=>)
-    [(_ test-name [expr => output-string]            ...)
+    [(_ test-name [expr => output-string] ...)
      (set! all-tests
            (cons
-            '(test-name [expr string  output-string] ...)
+            '(test-name [expr string output-string] ...)
+            all-tests))]))
+
+(define-syntax add-tests-with-precompiled-output
+  (syntax-rules (=>)
+    [(_ test-name [expr => precompiled-expr] ...)
+     (set! all-tests
+           (cons
+            '(test-name [expr precompiled precompiled-expr] ...)
             all-tests))]))
 
 (define (test-with-string-output test-id expr expected-output)
   (unless (string=? expected-output (run expr))
     (error 'test (format "Output mismatch for test ~s, expected ~s, got ~s."
                          test-id expected-output (get-string)))))
+
+(define (test-with-precompiled-output test-id expr expected-output)
+  (let ((actual (precompile expr)))
+    (unless (equal? expected-output actual)
+      (error 'test (format "Precompile output mismatch for test ~s, expected ~s, got ~s."
+                           test-id expected-output actual)))))
 
 (define (test-one test-id test)
   (let ([expr (car test)]
@@ -54,6 +68,7 @@
     (flush-output-port)
     (case type
      [(string) (test-with-string-output test-id expr out)]
+     [(precompiled) (test-with-precompiled-output test-id expr out)]
      [else (error 'test (format "Invalid test type ~s." type))])
     (printf " Ok.\n")))
 
