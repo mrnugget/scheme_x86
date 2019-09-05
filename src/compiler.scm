@@ -124,55 +124,47 @@
                  (free (apply append (map cadr results))))
             (list annotated (remove-duplicates free))))))
 
-(define (precompile-add-labels pgm)
-  (let ()
-    (define next-label-tag 0)
-    (define label-forms '())
+(define (precompile-add-labels expr)
+  (define label-count 0)
+  (define label-forms '())
 
-    ; add a label with the given contents, returning its name as a symbol
-    (define (make-label form)
-      (let* ((new-tag next-label-tag)
-             (tag-name (string->symbol (format #f "lbl~a" new-tag)))
-             (new-label-forms (cons (list tag-name form) label-forms)))
-        (begin (set! next-label-tag (+ 1 new-tag))
-               (set! label-forms new-label-forms)
-               tag-name)))
+  (define (make-label expr)
+    (let* ((label (string->symbol (format #f "L_~a" label-count))))
+      (begin (set! label-count (add1 label-count))
+             (set! label-forms (cons (list label expr) label-forms))
+             label)))
 
-    (define (xform pgm)
-      (cond
-        ((not (list? pgm)) pgm) ; non-list stuff is unchanged
-        ((null? pgm) pgm)
+  (define (transform expr)
+    (cond
+      ((not (list? expr)) expr)
+      ((null? expr) expr)
 
-        ; transform lambdas into labels
-        ((lambda? pgm)
-         (let* ((arguments (cadr pgm))
-                (free-vars (caddr pgm))
-                (body (xform (cadddr pgm)))
-                (name (make-label `(code ,arguments ,free-vars ,body))))
-           `(closure ,name ,@free-vars)))
+      ((lambda? expr)
+       (let* ((arguments (cadr expr))
+              (free-vars (caddr expr))
+              (body (transform (cadddr expr)))
+              (name (make-label `(code ,arguments ,free-vars ,body))))
+         `(closure ,name ,@free-vars)))
 
-        ; recursively transform let expressions
-        ((let? pgm)
-         (let* ((bindings (cadr pgm))
-                (body (cddr pgm))
-                (binding-names (map car bindings))
-                (binding-values (map cadr bindings)))
-           `(let ,(map list binding-names (map xform binding-values))
-                 ,@(map xform body))))
+      ((let? expr)
+       (let* ((bindings (cadr expr))
+              (body (cddr expr))
+              (binding-names (map car bindings))
+              (binding-values (map cadr bindings)))
+         `(let ,(map list binding-names (map transform binding-values))
+            ,@(map transform body))))
 
-        ; handle function calls and if exprs
-        ((if? pgm) `(if ,@(map xform (cdr pgm))))
-        ((prim-apply? pgm)
-         `(prim-apply ,(prim-apply-fn pgm)
-                    ,@(map xform (prim-apply-args pgm))))
+      ((if? expr) `(if ,@(map transform (cdr expr))))
+      ((prim-apply? expr)
+       `(prim-apply ,(prim-apply-fn expr)
+                    ,@(map transform (prim-apply-args expr))))
 
-        ; turn normal function calls into funcall forms
-        (else `(funcall ,(xform (car pgm))
-                        ,@(map xform (cdr pgm))))))
+      (else `(funcall ,(transform (car expr))
+                      ,@(map transform (cdr expr))))))
 
-    (let ((new-pgm (xform pgm)))
-      `(labels ,label-forms
-               ,new-pgm))))
+  (let ((transformed-expr (transform expr)))
+    `(labels ,label-forms
+             ,transformed-expr)))
 
 (define (prim-apply? expr) (eq? (car expr) 'prim-apply))
 (define (prim-apply-fn expr) (cadr expr))
