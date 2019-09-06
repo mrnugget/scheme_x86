@@ -57,115 +57,6 @@
       (cons (car xs)
             (remove-duplicates (filter (lambda (el) (not (equal? (car xs) el))) xs)))))
 
-(define (precompile-annotate-free-vars e env)
-  (cond
-    ((null? e) (list e '()))
-
-    ; if the var is bound, then don't add it to the free list
-    ((variable? e) (list e (if (member e env) '() (list e))))
-
-    ; catch-all for immediates
-    ((not (list? e)) (list e '()))
-
-    ; handle if form so we don't end up with 'if' as a free var
-    ((if? e)
-     (let* ((parts (map (lambda (e) (precompile-annotate-free-vars e env)) (cdr e)))
-            (annotated (map car parts))
-            (free-vars (map cadr parts)))
-       (list `(if ,@annotated)
-             (remove-duplicates (apply append free-vars)))))
-
-    ; deal with lambdas
-    ((lambda? e)
-     (let* ((args (cadr e))
-            (body-form (caddr e))
-
-            ; treat the outer environment as unbound 
-            (annotated-body (precompile-annotate-free-vars body-form args))
-
-            ; free variables list shouldn't include args, even though they'll be
-            ; output as free when analyzing the body
-            (inner-free (filter (lambda (v) (not (memq v args)))
-                                (cadr annotated-body))))
-       (list `(lambda ,args ,inner-free ,(car annotated-body))
-             inner-free)))
-  ; primitive call - ignore the function, map over args
-    ((prim-apply? e)
-     (let* ((results (map (lambda (p) (precompile-annotate-free-vars p env))
-                          (cddr e)))
-            (annotated (map car results))
-            (free (apply append (map cadr results))))
-       (list `(prim-apply ,(cadr e) ,@annotated)
-             (remove-duplicates free))))
-
-    ; check for let form and apply bindings
-    ((let? e)
-     (let* ((bindings (cadr e))
-            (body-forms (cddr e))
-            (bind-names (map car bindings))
-            (bind-bodies (map cadr bindings))
-
-            ; analyze all binding bodies
-            (body-free (map (lambda (e) (precompile-annotate-free-vars e env))
-                            bind-bodies))
-            (new-bodies (map car body-free))
-            (body-free (apply append (map cadr body-free)))
-
-            (inner-env (append bind-names env))
-            (inner-annotated
-              (map (lambda (b) (precompile-annotate-free-vars b inner-env))
-                   body-forms)))
-       (list `(let ,(map list bind-names new-bodies) ,@(map car inner-annotated))
-             (remove-duplicates (append (apply append (map cadr inner-annotated))
-                                        body-free)))))
-
-    (else (let* ((results (map (lambda (p) (precompile-annotate-free-vars p env)) e))
-                 (annotated (map car results))
-                 (free (apply append (map cadr results))))
-            (list annotated (remove-duplicates free))))))
-
-(define (precompile-add-labels expr)
-  (define label-count 0)
-  (define label-forms '())
-
-  (define (make-label expr)
-    (let* ((label (string->symbol (format #f "L_~a" label-count))))
-      (begin (set! label-count (add1 label-count))
-             (set! label-forms (cons (list label expr) label-forms))
-             label)))
-
-  (define (transform expr)
-    (cond
-      ((not (list? expr)) expr)
-      ((null? expr) expr)
-
-      ((lambda? expr)
-       (let* ((arguments (cadr expr))
-              (free-vars (caddr expr))
-              (body (transform (cadddr expr)))
-              (name (make-label `(code ,arguments ,free-vars ,body))))
-         `(closure ,name ,@free-vars)))
-
-      ((let? expr)
-       (let* ((bindings (cadr expr))
-              (body (cddr expr))
-              (binding-names (map car bindings))
-              (binding-values (map cadr bindings)))
-         `(let ,(map list binding-names (map transform binding-values))
-            ,@(map transform body))))
-
-      ((if? expr) `(if ,@(map transform (cdr expr))))
-      ((prim-apply? expr)
-       `(prim-apply ,(prim-apply-fn expr)
-                    ,@(map transform (prim-apply-args expr))))
-
-      (else `(funcall ,(transform (car expr))
-                      ,@(map transform (cdr expr))))))
-
-  (let ((transformed-expr (transform expr)))
-    `(labels ,label-forms
-             ,transformed-expr)))
-
 (define (prim-apply? expr) (eq? (car expr) 'prim-apply))
 (define (prim-apply-fn expr) (cadr expr))
 (define (prim-apply-args expr) (cddr expr))
@@ -456,6 +347,115 @@
     (emit "pop %esi")
 
     (emit "ret")))
+
+(define (precompile-annotate-free-vars e env)
+  (cond
+    ((null? e) (list e '()))
+
+    ; if the var is bound, then don't add it to the free list
+    ((variable? e) (list e (if (member e env) '() (list e))))
+
+    ; catch-all for immediates
+    ((not (list? e)) (list e '()))
+
+    ; handle if form so we don't end up with 'if' as a free var
+    ((if? e)
+     (let* ((parts (map (lambda (e) (precompile-annotate-free-vars e env)) (cdr e)))
+            (annotated (map car parts))
+            (free-vars (map cadr parts)))
+       (list `(if ,@annotated)
+             (remove-duplicates (apply append free-vars)))))
+
+    ; deal with lambdas
+    ((lambda? e)
+     (let* ((args (cadr e))
+            (body-form (caddr e))
+
+            ; treat the outer environment as unbound 
+            (annotated-body (precompile-annotate-free-vars body-form args))
+
+            ; free variables list shouldn't include args, even though they'll be
+            ; output as free when analyzing the body
+            (inner-free (filter (lambda (v) (not (memq v args)))
+                                (cadr annotated-body))))
+       (list `(lambda ,args ,inner-free ,(car annotated-body))
+             inner-free)))
+  ; primitive call - ignore the function, map over args
+    ((prim-apply? e)
+     (let* ((results (map (lambda (p) (precompile-annotate-free-vars p env))
+                          (cddr e)))
+            (annotated (map car results))
+            (free (apply append (map cadr results))))
+       (list `(prim-apply ,(cadr e) ,@annotated)
+             (remove-duplicates free))))
+
+    ; check for let form and apply bindings
+    ((let? e)
+     (let* ((bindings (cadr e))
+            (body-forms (cddr e))
+            (bind-names (map car bindings))
+            (bind-bodies (map cadr bindings))
+
+            ; analyze all binding bodies
+            (body-free (map (lambda (e) (precompile-annotate-free-vars e env))
+                            bind-bodies))
+            (new-bodies (map car body-free))
+            (body-free (apply append (map cadr body-free)))
+
+            (inner-env (append bind-names env))
+            (inner-annotated
+              (map (lambda (b) (precompile-annotate-free-vars b inner-env))
+                   body-forms)))
+       (list `(let ,(map list bind-names new-bodies) ,@(map car inner-annotated))
+             (remove-duplicates (append (apply append (map cadr inner-annotated))
+                                        body-free)))))
+
+    (else (let* ((results (map (lambda (p) (precompile-annotate-free-vars p env)) e))
+                 (annotated (map car results))
+                 (free (apply append (map cadr results))))
+            (list annotated (remove-duplicates free))))))
+
+(define (precompile-add-labels expr)
+  (define label-count 0)
+  (define label-forms '())
+
+  (define (make-label expr)
+    (let* ((label (string->symbol (format #f "L_~a" label-count))))
+      (begin (set! label-count (add1 label-count))
+             (set! label-forms (cons (list label expr) label-forms))
+             label)))
+
+  (define (transform expr)
+    (cond
+      ((not (list? expr)) expr)
+      ((null? expr) expr)
+
+      ((lambda? expr)
+       (let* ((arguments (cadr expr))
+              (free-vars (caddr expr))
+              (body (transform (cadddr expr)))
+              (name (make-label `(code ,arguments ,free-vars ,body))))
+         `(closure ,name ,@free-vars)))
+
+      ((let? expr)
+       (let* ((bindings (cadr expr))
+              (body (cddr expr))
+              (binding-names (map car bindings))
+              (binding-values (map cadr bindings)))
+         `(let ,(map list binding-names (map transform binding-values))
+            ,@(map transform body))))
+
+      ((if? expr) `(if ,@(map transform (cdr expr))))
+      ((prim-apply? expr)
+       `(prim-apply ,(prim-apply-fn expr)
+                    ,@(map transform (prim-apply-args expr))))
+
+      (else `(funcall ,(transform (car expr))
+                      ,@(map transform (cdr expr))))))
+
+  (let ((transformed-expr (transform expr)))
+    `(labels ,label-forms
+             ,transformed-expr)))
 
 (define (precompile expr)
   (precompile-add-labels (car (precompile-annotate-free-vars expr '()))))
