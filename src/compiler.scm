@@ -240,14 +240,14 @@
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
-     (emit "movl ~a(%esp), %edx" stack-index)
-     (emit "movl %eax, ~a(%edx)" (- object-tag-pair))]
+     (emit "movl ~a(%esp), %edi" stack-index)
+     (emit "movl %eax, ~a(%edi)" (- object-tag-pair))]
     [(set-cdr!)
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
-     (emit "movl ~a(%esp), %edx" stack-index)
-     (emit "movl %eax, ~a(%edx)" (- wordsize object-tag-pair))]
+     (emit "movl ~a(%esp), %edi" stack-index)
+     (emit "movl %eax, ~a(%edi)" (- wordsize object-tag-pair))]
     [(string?) (emit-object-tag-eq? expr stack-index env object-tag-string)]
     [(make-string)
      (emit-fixnum-expr (prim-apply-arg-1 expr) stack-index env)
