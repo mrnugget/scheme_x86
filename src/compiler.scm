@@ -423,8 +423,9 @@
 
   (emit "ret"))
 
-(define (precompile program)
-  (precompile-add-labels (car (precompile-annotate-free-vars program '()))))
+(define (precompile expr)
+  (precompile-add-labels (car (precompile-annotate-free-vars expr '()))))
 
 (define (compile-program expr)
- (emit-program expr (new-env)))
+  (let ([precompiled (precompile expr)])
+    (emit-program (caddr precompiled) (new-env))))
