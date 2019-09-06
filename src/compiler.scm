@@ -34,6 +34,7 @@
 (define object-tag-pair 1)
 (define object-tag-vector 2)
 (define object-tag-string 3)
+(define object-tag-closure 6)
 
 (define wordsize 4)
 
@@ -285,18 +286,81 @@
     (emit-expr (if-alternative expr) stack-index env)
     (emit-label end-label)))
 
+(define (funcall? expr) (eq? (car expr) 'funcall))
+
+(define (emit-funcall expr stack-index env)
+  (let* ([call-target (cadr expr)]
+
+         ; stack offset that args start at
+         ; the (* 2 wordsize) is space for return addr and closure
+         [args-start (- stack-index (* 2 wordsize))]
+
+         [args (cddr expr)]
+         ; build stack offsets for each argument
+         ; results in a list of (arg-body stack-offset) pairs
+         [args (map list args
+                    (map (lambda (i) (- args-start (* wordsize i)))
+                         (iota (length args))))]
+
+         [eval-stack-index (- args-start (* wordsize (length args)))])
+
+    ; evaluate arguments from left to right, storing into arg cells
+    (for-each
+      (lambda (arg) (begin (emit-expr (car arg) eval-stack-index env)
+                           (emit "movl %eax, ~a(%esp)" (cadr arg))))
+      args)
+
+    ; evaluate closure we want to call
+    (emit-expr call-target eval-stack-index env)
+
+    ; store current closure pointer and switch to the new closure
+    (emit "movl %edx, ~a(%esp)" stack-index)
+    (emit "movl %eax, %edx")
+    (emit "subl $~a, %edx" object-tag-closure)
+
+    ; advance %esp and call the function
+    (emit "subl $~a, %esp" (- stack-index))
+    (emit "call *(%edx)")
+
+    ; restore the stack pointer afterwards and reload our current closure
+    (emit "addl $~a, %esp" (- stack-index))
+    (emit "movl ~a(%esp), %edx" stack-index)))
+
+(define (closure? expr) (eq? (car expr) 'closure))
+
+(define (emit-closure expr stack-index env)
+  (let ([label (cadr expr)]
+        [free-vars (cddr expr)])
+    ; construct closure object - fetch the label and store code ptr
+    (emit-variable label stack-index env)
+    (emit "movl %eax, 0(%esi)")
+
+    ; build the tagged pointer
+    (emit "movl %esi, %eax")
+    (emit "orl $~a, %eax" object-tag-closure)
+
+    ; advance allocation pointer
+    (emit "addl $~a, %esi" wordsize)))
+
+(define (emit-variable expr stack-index env)
+  (let ([p (lookup expr env)])
+    (if (not (pair? p))
+        (error 'lookup (format "not found in env: ~a" expr))
+        (case (cadr p)
+          [var (emit "movl ~a(%esp), %eax" (caddr p))]
+          [label (emit "movl $~a, %eax" (caddr p))]))))
+
 (define (emit-expr expr stack-index env)
   ; (display (format "\n(emit-expr expr=~a stack-index=~a env=~a)\n" expr stack-index env))
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
         [(variable? expr)
-         (let ([p (lookup expr env)])
-           (if (pair? p)
-               (emit "movl ~a(%esp), %eax" (caddr p))
-               (error 'lookup (format "not found in env: ~a" expr))))]
+         (emit-variable expr stack-index env)]
         [(let? expr)
          (emit-let (let-bindings expr) (let-body expr) stack-index env)]
         [(if? expr) (emit-if expr stack-index env)]
         [(prim-apply? expr) (emit-prim-apply expr stack-index env)]
+        [(funcall? expr) (emit-funcall expr stack-index env)]
+        [(closure? expr) (emit-closure expr stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
@@ -339,7 +403,7 @@
     (emit "movl 16(%esp), %esi")
 
     ; Compile!
-    (emit-expr body (- wordsize) env)
+    (emit-expr body (- wordsize) env-with-symbols)
 
     ; Restore registers
     (emit "pop %edx")
