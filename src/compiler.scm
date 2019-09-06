@@ -342,7 +342,19 @@
 
 (define (new-env) '())
 (define (lookup ident env) (assoc ident env))
-(define (extend-env ident stack-index env) (cons (cons ident stack-index) env))
+(define (extend-env-var ident stack-index env)
+  (cons (cons ident (list 'var stack-index)) env))
+(define (extend-env-vars idents stack-indexes env)
+  (fold-left (lambda (e arg index) (extend-env-var arg index e))
+             env
+             idents
+             stack-indexes))
+(define (extend-env-label label env)
+  (cons (cons label (list 'label label)) env))
+(define (extend-env-labels labels env)
+  (fold-left (lambda (e label) (extend-env-label label e))
+             env
+             labels))
 
 (define (emit-let bindings body stack-index env)
   ; (display (format "\n(emit-let bindings=~a body=~a stack-index=~a env=~a)\n" bindings body stack-index env))
@@ -355,7 +367,7 @@
           (emit-expr (binding-value b) stack-index env)
           (emit "movl %eax, ~a(%esp)" stack-index)
           (loop (cdr b*)
-             (extend-env (binding-ident b) stack-index e)
+             (extend-env-var (binding-ident b) stack-index e)
              (- stack-index wordsize))))))
 
 (define (if? expr) (eq? 'if (car expr)))
@@ -388,7 +400,7 @@
         [(variable? expr)
          (let ([p (lookup expr env)])
            (if (pair? p)
-               (emit "movl ~a(%esp), %eax" (cdr p))
+               (emit "movl ~a(%esp), %eax" (caddr p))
                (error 'lookup (format "not found in env: ~a" expr))))]
         [(let? expr)
          (emit-let (let-bindings expr) (let-body expr) stack-index env)]
@@ -398,34 +410,56 @@
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
 
-(define (emit-program expr env)
-  (emit ".text")
-  (emit ".p2align 4,,15")
-  (emit ".globl scheme_entry")
-  (emit ".type scheme_entry, @function")
-  (emit-label "scheme_entry")
+(define (emit-label-code label env)
+  (case (caadr label)
+    ((code)
+     (let*
+       ((code-form (cadr label))
+        (name (car label))
+        (args (cadr code-form))
+        (captured (caddr code-form))
+        (body (cadddr code-form))
+        (inner-env (extend-env-vars args
+                                    (map (lambda (i) (* (- wordsize) (+ 1 i))) (iota (length args)))
+                                    env))
+        (locals-start (- (* wordsize (+ 1 (length args))))))
+       (emit "~a:" name)
+       (emit-expr body locals-start inner-env)
+       (emit "ret")))))
 
-  ; Save registers
-  (emit "push %esi")
-  (emit "push %edi")
-  (emit "push %edx")
+(define (emit-program labels body env)
+  (let* ([env-with-symbols (extend-env-labels (map car labels) env)])
+    (emit ".text")
+    (emit ".p2align 4,,15")
+    (emit ".globl scheme_entry")
 
-  ; Save heap pointer
-  (emit "movl 16(%esp), %esi")
+    (for-each
+      (lambda (lbl) (emit-label-code lbl env-with-symbols))
+      labels)
 
-  ; Compile!
-  (emit-expr expr (- wordsize) env)
+    (emit ".type scheme_entry, @function")
+    (emit-label "scheme_entry")
+    ; Save registers
+    (emit "push %esi")
+    (emit "push %edi")
+    (emit "push %edx")
 
-  ; Restore registers
-  (emit "pop %edx")
-  (emit "pop %edi")
-  (emit "pop %esi")
+    ; Save heap pointer
+    (emit "movl 16(%esp), %esi")
 
-  (emit "ret"))
+    ; Compile!
+    (emit-expr body (- wordsize) env)
+
+    ; Restore registers
+    (emit "pop %edx")
+    (emit "pop %edi")
+    (emit "pop %esi")
+
+    (emit "ret")))
 
 (define (precompile expr)
   (precompile-add-labels (car (precompile-annotate-free-vars expr '()))))
 
 (define (compile-program expr)
   (let ([precompiled (precompile expr)])
-    (emit-program (caddr precompiled) (new-env))))
+    (emit-program (cadr precompiled) (caddr precompiled) (new-env))))

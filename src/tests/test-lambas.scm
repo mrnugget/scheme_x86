@@ -1,2 +1,2 @@
 (add-tests-with-string-output "lambdas"
-  [(prim-apply procedure? (lambda (x) (prim-apply + x x))) => "#t\n"])
+  [((lambda (x) (prim-apply + 1 x)) 2) => "3\n"])
