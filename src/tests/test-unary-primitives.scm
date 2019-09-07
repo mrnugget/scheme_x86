@@ -61,7 +61,7 @@
    [(prim-apply null? ()) => "#t\n"]
    [(prim-apply null? #f) => "#f\n"]
    [(prim-apply null? #t) => "#f\n"]
-   [(prim-apply null? (null? ())) => "#f\n"]
+   [(prim-apply null? (prim-apply null? ())) => "#f\n"]
    [(prim-apply null? #\a) => "#f\n"]
    [(prim-apply null? 0) => "#f\n"]
    [(prim-apply null? -10) => "#f\n"]
