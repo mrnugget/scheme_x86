@@ -249,7 +249,6 @@
              labels))
 
 (define (emit-let bindings body stack-index env)
-  ; (display (format "\n(emit-let bindings=~a body=~a stack-index=~a env=~a)\n" bindings body stack-index env))
   (let loop ([b* bindings]
              [e env]
              [stack-index stack-index])
@@ -268,9 +267,8 @@
 (define (if-alternative expr) (cadddr expr))
 
 (define label-count 0)
-
 (define (unique-label)
-  (let ([l (format "label_~a" label-count)])
+  (let ([l (string->symbol (format "label_~a" label-count))])
     (set! label-count (+ label-count 1))
     l))
 
@@ -478,14 +476,7 @@
             (list annotated (remove-duplicates free))))))
 
 (define (precompile-add-labels expr)
-  (define label-count 0)
   (define label-forms '())
-
-  (define (make-label expr)
-    (let* ((label (string->symbol (format #f "L_~a" label-count))))
-      (begin (set! label-count (add1 label-count))
-             (set! label-forms (cons (list label expr) label-forms))
-             label)))
 
   (define (transform expr)
     (cond
@@ -496,8 +487,11 @@
        (let* ((arguments (cadr expr))
               (free-vars (caddr expr))
               (body (transform (cadddr expr)))
-              (name (make-label `(code ,arguments ,free-vars ,body))))
-         `(closure ,name ,@free-vars)))
+              (label (unique-label))
+              (code-expr `(code ,arguments ,free-vars ,body)))
+         (begin
+           (set! label-forms (cons (list label code-expr) label-forms))
+           `(closure ,label ,@free-vars))))
 
       ((let? expr)
        (let* ((bindings (cadr expr))
@@ -520,6 +514,7 @@
              ,transformed-expr)))
 
 (define (precompile expr)
+  (set! label-count 0)
   (precompile-add-labels (car (precompile-annotate-free-vars expr '()))))
 
 (define (compile-program expr)
