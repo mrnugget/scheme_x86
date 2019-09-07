@@ -365,20 +365,22 @@
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
 
+(define (args-to-stack-offsets args)
+  (map (lambda (i) (* (- wordsize) (+ 1 i))) (iota (length args))))
+
 (define (emit-label-code label env)
   (case (caadr label)
     ((code)
      (let*
-       ((code-form (cadr label))
-        (name (car label))
-        (args (cadr code-form))
-        (captured (caddr code-form))
-        (body (cadddr code-form))
-        (inner-env (extend-env-vars args
-                                    (map (lambda (i) (* (- wordsize) (+ 1 i))) (iota (length args)))
-                                    env))
-        (locals-start (- (* wordsize (+ 1 (length args))))))
-       (emit "~a:" name)
+       ([code-form (cadr label)]
+        [name (car label)]
+        [args (cadr code-form) ]
+        [captured (caddr code-form) ]
+        [body (cadddr code-form) ]
+        [inner-env (extend-env-vars args (args-to-stack-offsets args) env)]
+        [locals-start (- (* wordsize (+ 1 (length args))))])
+
+       (emit-label name)
        (emit-expr body locals-start inner-env)
        (emit "ret")))))
 
@@ -387,12 +389,12 @@
     (emit ".text")
     (emit ".p2align 4,,15")
     (emit ".globl scheme_entry")
+    (emit ".type scheme_entry, @function")
 
     (for-each
       (lambda (lbl) (emit-label-code lbl env-with-symbols))
       labels)
 
-    (emit ".type scheme_entry, @function")
     (emit-label "scheme_entry")
     ; Save registers
     (emit "push %esi")
