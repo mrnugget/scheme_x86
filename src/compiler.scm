@@ -226,7 +226,7 @@
   (emit "sall $~a, %eax" bool-shift)
   (emit "orl $~a, %eax" bool-tag))
 
-(define (variable? expr) (symbol? expr))
+(define (identifier? expr) (symbol? expr))
 (define (let? expr) (eq? 'let (car expr)))
 (define (let-bindings expr) (cadr expr))
 (define (let-body expr) (cddr expr))
@@ -348,12 +348,12 @@
   (let ([label (cadr expr)]
         [free-vars (cddr expr)])
     ;; Store label in location pointed to by %esi
-    (emit-variable label stack-index env)
+    (emit-identifier label stack-index env)
     (emit "movl %eax, 0(%esi)")
 
     (for-each
       (lambda (free offset)
-        (emit-variable free stack-index env)
+        (emit-identifier free stack-index env)
         (emit "movl %eax, ~a(%esi)" offset))
       free-vars
       (free-vars-to-closure-offsets free-vars))
@@ -372,7 +372,7 @@
     (emit "addl $~a, %esi" (+ 7 (* wordsize (+ 1 (length free-vars)))))
     (emit "andl $-8, %esi")))
 
-(define (emit-variable expr stack-index env)
+(define (emit-identifier expr stack-index env)
   (let ([p (lookup expr env)])
     (if (not (pair? p))
         (error 'lookup (format "not found in env: ~a" expr))
@@ -384,8 +384,8 @@
 (define (emit-expr expr stack-index env)
   ; (display (format "\n(emit-expr expr=~a stack-index=~a env=~a)\n" expr stack-index env))
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
-        [(variable? expr)
-         (emit-variable expr stack-index env)]
+        [(identifier? expr)
+         (emit-identifier expr stack-index env)]
         [(let? expr)
          (emit-let (let-bindings expr) (let-body expr) stack-index env)]
         [(if? expr) (emit-if expr stack-index env)]
@@ -456,7 +456,7 @@
     ((null? expr) (list expr '()))
 
     ; if the var is bound, then don't add it to the free list
-    ((variable? expr)
+    ((identifier? expr)
        (list expr (if (member expr free-vars) '() (list expr))))
 
     ; catch-all for immediates
