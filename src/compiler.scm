@@ -235,19 +235,32 @@
 
 (define (new-env) '())
 (define (lookup ident env) (assoc ident env))
+
 (define (extend-env-var ident stack-index env)
   (cons (cons ident (list 'var stack-index)) env))
+
 (define (extend-env-vars idents stack-indexes env)
   (fold-left (lambda (e arg index) (extend-env-var arg index e))
              env
              idents
              stack-indexes))
+
 (define (extend-env-label label env)
   (cons (cons label (list 'label label)) env))
+
 (define (extend-env-labels labels env)
   (fold-left (lambda (e label) (extend-env-label label e))
              env
              labels))
+
+(define (extend-env-free free-var closure-offset env)
+  (cons (cons free-var (list 'free-var closure-offset)) env))
+
+(define (extend-env-frees free-vars closure-offsets env)
+  (fold-left (lambda (e free-var offset) (extend-env-free free-var offset e))
+             env
+             free-vars
+             closure-offsets))
 
 (define (emit-let bindings body stack-index env)
   (let loop ([b* bindings]
@@ -338,16 +351,25 @@
     (emit-variable label stack-index env)
     (emit "movl %eax, 0(%esi)")
 
+    (for-each
+      (lambda (free offset)
+        (emit-variable free stack-index env)
+        (emit "movl %eax, ~a(%esi)" offset))
+      free-vars
+      (free-vars-to-closure-offsets free-vars))
+
     ;; Move pointer to %eax and tag it
     (emit "movl %esi, %eax")
     (emit "orl $~a, %eax" object-tag-closure)
 
     ;; Increase allocation pointer in %esi
-    ;; Add 7+4 to pointer in %esi because
+    ;; Add 7+((length-free-vars + 1)*wordsize) to pointer in %esi because
     ;; * 7 to align to multiple of 8
-    ;; * 4 because that's the size of the label we stored and want to skip.
+    ;; * `+ 1` because that's the size of the label we stored and want to skip.
+    ;; * `+ length-free-vars` because that's the free vars stored after label we want to skip
     ;; then bitwise-AND it with -8
-    (emit "addl $11, %esi")
+
+    (emit "addl $~a, %esi" (+ 7 (* wordsize (+ 1 (length free-vars)))))
     (emit "andl $-8, %esi")))
 
 (define (emit-variable expr stack-index env)
@@ -356,7 +378,8 @@
         (error 'lookup (format "not found in env: ~a" expr))
         (case (cadr p)
           [var (emit "movl ~a(%esp), %eax" (caddr p))]
-          [label (emit "movl $~a, %eax" (caddr p))]))))
+          [label (emit "movl $~a, %eax" (caddr p))]
+          [free-var (emit "movl ~a(%edx), %eax" (caddr p))]))))
 
 (define (emit-expr expr stack-index env)
   ; (display (format "\n(emit-expr expr=~a stack-index=~a env=~a)\n" expr stack-index env))
@@ -376,6 +399,9 @@
 (define (args-to-stack-offsets args)
   (map (lambda (i) (* (- wordsize) (+ 1 i))) (iota (length args))))
 
+(define (free-vars-to-closure-offsets free-vars)
+  (map (lambda (i) (* wordsize (+ 1 i))) (iota (length free-vars))))
+
 (define (emit-label-code label env)
   (case (caadr label)
     ((code)
@@ -383,9 +409,14 @@
        ([code-form (cadr label)]
         [name (car label)]
         [args (cadr code-form) ]
-        [captured (caddr code-form) ]
+        [free-vars (caddr code-form) ]
         [body (cadddr code-form) ]
-        [inner-env (extend-env-vars args (args-to-stack-offsets args) env)]
+        [inner-env
+          (extend-env-frees free-vars
+                            (free-vars-to-closure-offsets free-vars)
+                            (extend-env-vars args
+                                             (args-to-stack-offsets args)
+                                             env))]
         [locals-start (- (* wordsize (+ 1 (length args))))])
 
        (emit-label name)

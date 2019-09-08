@@ -30,3 +30,24 @@
   [((lambda (g x) (g x)) (lambda (x) (prim-apply + 1 x)) 2) => "3\n"]
   [(let ([f (lambda (g) (prim-apply + (g 10) (g 100)))])
     (f (lambda (x) (prim-apply + x x)))) => "220\n"])
+
+(add-tests-with-string-output "closures"
+ [(let ([n 12])
+    (let ([f (lambda () n)])
+      (f))) => "12\n"]
+ [(let ([n 12])
+    (let ([f (lambda (m) (prim-apply + n m))])
+      (f 100))) => "112\n"]
+ [(let ([f (lambda (f n m)
+             (if (prim-apply zero? n)
+                 m
+                 (f (prim-apply sub1 n) (prim-apply + n m))))])
+   (let ([g (lambda (g n m) (f (lambda (n m) (g g n m)) n m))])
+     (g g 5 1))) => "16\n"]
+ [(let ([f (lambda (f n)
+             (if (prim-apply zero? n)
+                 1
+                 (prim-apply + n (f (prim-apply sub1 n)))))])
+   (let ([g (lambda (g n) (f (lambda (n) (g g n)) n))])
+     (g g 5))) => "16\n"]
+)
