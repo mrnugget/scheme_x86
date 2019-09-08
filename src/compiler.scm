@@ -334,22 +334,21 @@
 (define (emit-closure expr stack-index env)
   (let ([label (cadr expr)]
         [free-vars (cddr expr)])
-    ; construct closure object - fetch the label and store code ptr
+    ;; Store label in location pointed to by %esi
     (emit-variable label stack-index env)
     (emit "movl %eax, 0(%esi)")
 
-    ; build the tagged pointer
+    ;; Move pointer to %eax and tag it
     (emit "movl %esi, %eax")
-
     (emit "orl $~a, %eax" object-tag-closure)
 
+    ;; Increase allocation pointer in %esi
     ;; Add 7+4 to pointer in %esi because
     ;; * 7 to align to multiple of 8
     ;; * 4 because that's the size of the label we stored and want to skip.
     ;; then bitwise-AND it with -8
     (emit "addl $11, %esi")
-    (emit "andl $-8, %esi")
-    ))
+    (emit "andl $-8, %esi")))
 
 (define (emit-variable expr stack-index env)
   (let ([p (lookup expr env)])
