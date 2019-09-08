@@ -7,9 +7,9 @@
      p)))
 
 (define (emit . args)
-  (let ([format (string-append "\t" (car args))]
+  (let ([line-format (string-append "\t" (car args))]
         [rest (cdr args)])
-    (apply fprintf (compile-port) format rest)
+    (apply fprintf (compile-port) line-format rest)
     (newline (compile-port))))
 
 (define (emit-label label)
@@ -207,7 +207,8 @@
      (emit-fixnum-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "sall $2, %eax")                    ;; Multiply `length` by four
      (emit "addl ~a(%esp), %eax" stack-index)
-     (emit "movl (%eax), %eax")]))
+     (emit "movl (%eax), %eax")]
+    [(closure?) (emit-object-tag-eq? expr stack-index env object-tag-closure)]))
 
 (define (emit-object-tag-eq? expr stack-index env tag)
   (emit-prim-apply-args expr stack-index env)
@@ -314,7 +315,11 @@
     ; store current closure pointer and switch to the new closure
     (emit "movl %edx, ~a(%esp)" stack-index)
     (emit "movl %eax, %edx")
+
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;; TODO: TAGGING IS BROKEN
     (emit "subl $~a, %edx" object-tag-closure)
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     ; advance %esp and call the function
     (emit "subl $~a, %esp" (- stack-index))
@@ -335,10 +340,16 @@
 
     ; build the tagged pointer
     (emit "movl %esi, %eax")
+
     (emit "orl $~a, %eax" object-tag-closure)
 
-    ; advance allocation pointer
-    (emit "addl $~a, %esi" wordsize)))
+    ;; Add 7+4 to pointer in %esi because
+    ;; * 7 to align to multiple of 8
+    ;; * 4 because that's the size of the label we stored and want to skip.
+    ;; then bitwise-AND it with -8
+    (emit "addl $11, %esi")
+    (emit "andl $-8, %esi")
+    ))
 
 (define (emit-variable expr stack-index env)
   (let ([p (lookup expr env)])

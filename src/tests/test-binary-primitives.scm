@@ -1,6 +1,7 @@
 (add-tests-with-string-output "binary primitive +"
   [(prim-apply + 1 2)  => "3\n"]
   [(prim-apply + 1 2) => "3\n"]
+  [(prim-apply + 1 2 3 4 5 6) => "21\n"]
   [(prim-apply + 1 -2) => "-1\n"]
   [(prim-apply + -1 2) => "1\n"]
   [(prim-apply + -1 -2) => "-3\n"]
