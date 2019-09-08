@@ -20,6 +20,7 @@
 #define object_tag_pair   1
 #define object_tag_vector 2
 #define object_tag_string 3
+#define object_tag_closure 6
 
 #define heap_size 0x400000
 
@@ -104,6 +105,8 @@ void print_value(int val) {
             elements++;
         }
         putchar(')');
+    } else if ((val & object_mask) == object_tag_closure) {
+        printf("<closure>");
     } else {
         printf("unrecognized value: %d", val);
     }

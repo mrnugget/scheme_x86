@@ -1,5 +1,6 @@
 (add-tests-with-string-output "lambdas"
   [((lambda (x) x) 99) => "99\n"]
+  [(lambda (x) x) => "<closure>\n"]
   [(prim-apply closure? (lambda (x) x)) => "#t\n"]
   [(prim-apply closure? 1) => "#f\n"]
   [(prim-apply closure? (prim-apply make-vector 0)) => "#f\n"]
