@@ -49,5 +49,17 @@
                  1
                  (prim-apply + n (f (prim-apply sub1 n)))))])
    (let ([g (lambda (g n) (f (lambda (n) (g g n)) n))])
-     (g g 5))) => "16\n"]
-)
+     (g g 5))) => "16\n"])
+
+(add-tests-with-string-output "tailcalls"
+ [(let ([g (lambda (x) (prim-apply + x x))])
+     ((lambda (y) (g y)) 5)) => "10\n"]
+ [(let ([g (lambda (x) (prim-apply + x x))])
+     ((lambda (y) (if (prim-apply zero? y) 0 (g y))) 5))
+ => "10\n"]
+ [(let ([f (lambda (z) (prim-apply + z z))])
+    (let ([g (lambda (x) (f x))])
+      ((lambda (y) (g y)) 5))) => "10\n"]
+ [(let ([f (lambda (z a) (prim-apply + z a))])
+    (let ([g (lambda (x) (f x 99))])
+      ((lambda (y) (g y)) 5))) => "104\n"])

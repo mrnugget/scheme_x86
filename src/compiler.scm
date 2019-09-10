@@ -299,8 +299,9 @@
     (emit-label end-label)))
 
 (define (funcall? expr) (eq? (car expr) 'funcall))
+(define (tailcall? expr) (eq? (car expr) 'tailcall))
 
-(define (emit-funcall expr stack-index env)
+(define (emit-funcall expr stack-index env tailcall)
   (let* ([call-target (cadr expr)]
 
          ; stack offset that args start at
@@ -322,25 +323,31 @@
                            (emit "movl %eax, ~a(%esp)" (cadr arg))))
       args)
 
-    ; evaluate closure we want to call
+    ;; evaluate closure we want to call
     (emit-expr call-target eval-stack-index env)
-
-    ; store current closure pointer and switch to the new closure
     (emit "movl %edx, ~a(%esp)" stack-index)
     (emit "movl %eax, %edx")
-
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    ;; TODO: TAGGING IS BROKEN
     (emit "subl $~a, %edx" object-tag-closure)
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    ; advance %esp and call the function
-    (emit "subl $~a, %esp" (- stack-index))
-    (emit "call *(%edx)")
+    (if tailcall
+        (begin
+          (for-each
+            (lambda (arg stack-offset)
+              (begin (emit "movl ~a(%esp), %eax" (cadr arg))
+                     (emit "movl %eax, ~a(%esp)" (- (- wordsize)
+                                                    (* wordsize stack-offset)))))
+            args
+            (iota (length args)))
+          (emit "jmp *(%edx)"))
 
-    ; restore the stack pointer afterwards and reload our current closure
-    (emit "addl $~a, %esp" (- stack-index))
-    (emit "movl ~a(%esp), %edx" stack-index)))
+        (begin
+          ; advance %esp and call the function
+          (emit "subl $~a, %esp" (- stack-index))
+          (emit "call *(%edx)")
+
+          ; restore the stack pointer afterwards and reload our current closure
+          (emit "addl $~a, %esp" (- stack-index))
+          (emit "movl ~a(%esp), %edx" stack-index)))))
 
 (define (closure? expr) (eq? (car expr) 'closure))
 
@@ -390,7 +397,8 @@
          (emit-let (let-bindings expr) (let-body expr) stack-index env)]
         [(if? expr) (emit-if expr stack-index env)]
         [(prim-apply? expr) (emit-prim-apply expr stack-index env)]
-        [(funcall? expr) (emit-funcall expr stack-index env)]
+        [(funcall? expr) (emit-funcall expr stack-index env #f)]
+        [(tailcall? expr) (emit-funcall expr stack-index env #t)]
         [(closure? expr) (emit-closure expr stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
@@ -554,9 +562,41 @@
     `(labels ,label-forms
              ,transformed-expr)))
 
+(define (precompile-transform-trailcalls expr)
+  (let* ([label-forms (cadr expr)]
+         [body-form (caddr expr)])
+
+    (define (transform expr)
+      (cond
+        ([not (list? expr)] expr)
+
+        ([if? expr] `(if ,(cadr expr) ,@(map transform (cddr expr))))
+
+        ([let? expr]
+         (let ([rev (reverse expr)])
+           (reverse (cons (transform (car rev)) (cdr rev)))))
+
+        ([funcall? expr] (cons 'tailcall (cdr expr)))
+        (else expr)))
+
+    (define (transform-label label-form)
+      (case (caadr label-form)
+        ([code]
+          (let ((code-form (cadr label-form)))
+            `(,(car label-form)
+               (code ,(cadr code-form)
+                     ,(caddr code-form)
+                     ,(transform (cadddr code-form))))))
+
+        (else label-form)))
+
+    `(labels ,(map transform-label label-forms) ,body-form)))
+
 (define (precompile expr)
   (set! label-count 0)
-  (precompile-add-labels (car (precompile-annotate-free-vars expr '()))))
+  (precompile-transform-trailcalls
+    (precompile-add-labels
+      (car (precompile-annotate-free-vars expr '())))))
 
 (define (compile-program expr)
   (let ([precompiled (precompile expr)])
