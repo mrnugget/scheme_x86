@@ -404,7 +404,7 @@
 
 (define (emit-label-code label env)
   (case (caadr label)
-    ((code)
+    ([code]
      (let*
        ([code-form (cadr label)]
         [name (car label)]
@@ -453,17 +453,17 @@
 
 (define (precompile-annotate-free-vars expr free-vars)
   (cond
-    ((null? expr) (list expr '()))
+    ([null? expr] (list expr '()))
 
     ; if the var is bound, then don't add it to the free list
-    ((identifier? expr)
+    ([identifier? expr]
        (list expr (if (member expr free-vars) '() (list expr))))
 
     ; catch-all for immediates
-    ((not (list? expr)) (list expr '()))
+    ([not (list? expr)] (list expr '()))
 
     ; handle if form so we don't end up with 'if' as a free var
-    ((if? expr)
+    ([if? expr]
      (let* ((parts (map (lambda (expr) (precompile-annotate-free-vars expr free-vars)) (cdr expr)))
             (annotated (map car parts))
             (free-vars (map cadr parts)))
@@ -471,7 +471,7 @@
              (remove-duplicates (apply append free-vars)))))
 
     ; deal with lambdas
-    ((lambda? expr)
+    ([lambda? expr]
      (let* ((args (cadr expr))
             (body-form (caddr expr))
 
@@ -485,7 +485,7 @@
        (list `(lambda ,args ,inner-free ,(car annotated-body))
              inner-free)))
   ; primitive call - ignore the function, map over args
-    ((prim-apply? expr)
+    ([prim-apply? expr]
      (let* ((results (map (lambda (p) (precompile-annotate-free-vars p free-vars))
                           (cddr expr)))
             (annotated (map car results))
@@ -494,7 +494,7 @@
              (remove-duplicates free))))
 
     ; check for let form and apply bindings
-    ((let? expr)
+    ([let? expr]
      (let* ((bindings (cadr expr))
             (body-forms (cddr expr))
             (bind-names (map car bindings))
@@ -521,10 +521,10 @@
 
   (define (transform expr)
     (cond
-      ((not (list? expr)) expr)
-      ((null? expr) expr)
+      ([not (list? expr)] expr)
+      ([null? expr] expr)
 
-      ((lambda? expr)
+      ([lambda? expr]
        (let* ((arguments (cadr expr))
               (free-vars (caddr expr))
               (body (transform (cadddr expr)))
@@ -534,7 +534,7 @@
            (set! label-forms (cons (list label code-expr) label-forms))
            `(closure ,label ,@free-vars))))
 
-      ((let? expr)
+      ([let? expr]
        (let* ((bindings (cadr expr))
               (body (cddr expr))
               (binding-names (map car bindings))
@@ -542,8 +542,8 @@
          `(let ,(map list binding-names (map transform binding-values))
             ,@(map transform body))))
 
-      ((if? expr) `(if ,@(map transform (cdr expr))))
-      ((prim-apply? expr)
+      ([if? expr] `(if ,@(map transform (cdr expr))))
+      ([prim-apply? expr]
        `(prim-apply ,(prim-apply-fn expr)
                     ,@(map transform (prim-apply-args expr))))
 
