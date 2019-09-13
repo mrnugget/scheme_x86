@@ -562,7 +562,7 @@
     `(labels ,label-forms
              ,transformed-expr)))
 
-(define (precompile-transform-trailcalls expr)
+(define (precompile-transform-tailcalls expr)
   (let* ([label-forms (cadr expr)]
          [body-form (caddr expr)])
 
@@ -594,7 +594,7 @@
 
 (define (precompile expr)
   (set! label-count 0)
-  (precompile-transform-trailcalls
+  (precompile-transform-tailcalls
     (precompile-add-labels
       (car (precompile-annotate-free-vars expr '())))))
 
