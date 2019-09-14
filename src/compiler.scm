@@ -228,6 +228,7 @@
 
 (define (identifier? expr) (symbol? expr))
 (define (let? expr) (eq? 'let (car expr)))
+(define (quote? expr) (eq? 'quote (car expr)))
 (define (let-bindings expr) (cadr expr))
 (define (let-body expr) (cddr expr))
 (define (binding-ident b) (car b))
@@ -286,6 +287,12 @@
     (set! label-count (+ label-count 1))
     l))
 
+(define name-count 0)
+(define (unique-name prefix)
+  (let ([l (string->symbol (format "c_~a" name-count))])
+    (set! name-count (+ name-count 1))
+    l))
+
 (define (emit-if expr stack-index env)
   (let ([alternative-label (unique-label)]
         [end-label (unique-label)])
@@ -300,6 +307,8 @@
 
 (define (funcall? expr) (eq? (car expr) 'funcall))
 (define (tailcall? expr) (eq? (car expr) 'tailcall))
+(define (constant-ref? expr) (eq? (car expr) 'constant-ref))
+(define (constant-init? expr) (eq? (car expr) 'constant-init))
 
 (define (emit-funcall expr stack-index env tailcall)
   (let* ([call-target (cadr expr)]
@@ -388,6 +397,11 @@
           [label (emit "movl $~a, %eax" (caddr p))]
           [free-var (emit "movl ~a(%edx), %eax" (caddr p))]))))
 
+(define (emit-constant-ref expr stack-index env)
+  ;; TODO: NOOP FOR NOW
+  ; (emit-identifier (cadr expr) stack-index env))
+  '())
+
 (define (emit-expr expr stack-index env)
   ; (display (format "\n(emit-expr expr=~a stack-index=~a env=~a)\n" expr stack-index env))
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
@@ -400,6 +414,7 @@
         [(funcall? expr) (emit-funcall expr stack-index env #f)]
         [(tailcall? expr) (emit-funcall expr stack-index env #t)]
         [(closure? expr) (emit-closure expr stack-index env)]
+        [(constant-ref? expr) (emit-constant-ref expr stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
@@ -431,8 +446,11 @@
        (emit-expr body locals-start inner-env)
        (emit "ret")))))
 
-(define (emit-program labels body env)
+(define (emit-program labels constant-inits body env)
+  (display (format "labels=~a\n" labels))
+  (display (format "(map car labels)=~a\n" (map car labels)))
   (let* ([env-with-labels (extend-env-labels (map car labels) env)])
+    ; (display (format "env-with-labels=~a\n" env-with-labels))
     (emit ".text")
     (emit ".p2align 4,,15")
     (emit ".globl scheme_entry")
@@ -524,7 +542,11 @@
                  (free (apply append (map cadr results))))
             (list annotated (remove-duplicates free))))))
 
-(define (precompile-add-labels expr)
+(define (precompile-add-code-labels expr)
+  (let* ([existing-label-forms (cadr expr)]
+         ;; TODO this breaks as soon as we have more than one constant init
+         [constant-inits (caddr expr)]
+         [body-form (cadddr expr)])
   (define label-forms '())
 
   (define (transform expr)
@@ -555,16 +577,61 @@
        `(prim-apply ,(prim-apply-fn expr)
                     ,@(map transform (prim-apply-args expr))))
 
+      ([constant-ref? expr] expr)
+      ([constant-init? expr] expr)
       (else `(funcall ,(transform (car expr))
                       ,@(map transform (cdr expr))))))
 
+  (let* ((transformed-expr (transform body-form))
+        (new-labels-form (if (null? existing-label-forms)
+                             label-forms
+                             (cons (car existing-label-forms) label-forms))))
+    `(labels ,new-labels-form
+             ,constant-inits
+             ,transformed-expr))))
+
+(define (precompile-add-constants expr)
+  (define label-forms '())
+  (define constant-inits '())
+
+  (define (translate-quote expr)
+    (cond
+      [(immediate? expr) expr]
+      [(pair? expr)
+      (list 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
+      [(string? expr)
+      (cons 'string (map translate-quote (string->list expr)))]
+      [else (error 'translate-quote (format "don't know how to quote ~s" expr))]))
+
+  (define (transform expr)
+    (cond
+      ([not (list? expr)] expr)
+      ([null? expr] expr)
+
+      ([and (quote? expr) (immediate? (cdr expr))] (cdr expr))
+      ([and (quote? expr) (assoc expr label-forms)] => cadr)
+
+      [(quote? expr)
+       (let* ((label (unique-label))
+              (translated-quote (translate-quote (cadr expr))))
+         (begin
+           (set! label-forms (cons (list label '(datum)) label-forms))
+           (set! constant-inits (cons `(constant-init ,label ,translated-quote) constant-inits))
+           `(constant-ref ,label)))]
+
+      ([list? expr] (map transform expr))
+
+      (else expr)))
+
   (let ((transformed-expr (transform expr)))
     `(labels ,label-forms
+             ,constant-inits
              ,transformed-expr)))
 
 (define (precompile-transform-tailcalls expr)
   (let* ([label-forms (cadr expr)]
-         [body-form (caddr expr)])
+         [constant-inits (caddr expr)]
+         [body-form (cadddr expr)])
 
     (define (transform expr)
       (cond
@@ -575,7 +642,8 @@
         ([let? expr]
          (let ([rev (reverse expr)])
            (reverse (cons (transform (car rev)) (cdr rev)))))
-
+        ([constant-ref? expr] expr)
+        ([constant-init? expr] expr)
         ([funcall? expr] (cons 'tailcall (cdr expr)))
         (else expr)))
 
@@ -590,14 +658,23 @@
 
         (else label-form)))
 
-    `(labels ,(map transform-label label-forms) ,body-form)))
+    `(labels ,(map transform-label label-forms) ,constant-inits ,body-form)))
 
 (define (precompile expr)
   (set! label-count 0)
+  (set! name-count 0)
+
   (precompile-transform-tailcalls
-    (precompile-add-labels
-      (car (precompile-annotate-free-vars expr '())))))
+    (precompile-add-code-labels
+      (precompile-add-constants
+        (car (precompile-annotate-free-vars expr '()))))))
+
+;; enable precompilation tracing
+; (trace precompile precompile-transform-tailcalls precompile-add-code-labels precompile-add-constants precompile-annotate-free-vars)
+;; enable compilation-tracing
+; (trace emit-program emit-expr)
 
 (define (compile-program expr)
   (let ([precompiled (precompile expr)])
-    (emit-program (cadr precompiled) (caddr precompiled) (new-env))))
+    ; (display (format "\nprecompiled=~a\n" precompiled))
+    (emit-program (cadr precompiled) (caddr precompiled) (cadddr precompiled) (new-env))))

@@ -57,7 +57,7 @@
 (define (test-with-precompiled-output test-id expr expected-output)
   (let ((actual (precompile expr)))
     (unless (equal? expected-output actual)
-      (error 'test (format "Precompile output mismatch for test ~s, expected ~s, got ~s."
+      (error 'test (format "Precompile output mismatch for test ~s:\n\texpected=~s\n\t     got=~s"
                            test-id expected-output actual)))))
 
 (define (test-one test-id test)
