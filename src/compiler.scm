@@ -640,11 +640,19 @@
          ,@(map (lambda (c i) `(prim-apply string-set! s ,i ,c)) chars (iota len))
          s)))
 
+  (define (vector-constant->make-vector expr)
+    (let* ([chars (map translate-quote (vector->list expr))]
+           [len (length chars)])
+      `(let ((s (prim-apply make-vector ,len)))
+         ,@(map (lambda (c i) `(prim-apply vector-set! s ,i ,c)) chars (iota len))
+         s)))
+
   (define (translate-quote expr)
     (cond
       [(immediate? expr) expr]
       [(pair? expr)
       (list 'prim-apply 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
+      [(vector? expr) (vector-constant->make-vector expr)]
       [(string? expr) (string-constant->make-string expr)]
       [else (error 'translate-quote (format "don't know how to quote ~s" expr))]))
 

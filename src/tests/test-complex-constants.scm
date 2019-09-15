@@ -11,8 +11,7 @@
    ((f))) => "(1 2 3 . ())\n"]
  [(let ([f (lambda () '(1 2 3))])
    (prim-apply eq? (f) (f))) => "#t\n"]
-;  [(let ([x '#(1 2 3)]) 
-;     (cons x (vector-ref x 0))) => "(#(1 2 3) . 1)\n"]
+ [(let ([x '#(1 2 3)])
+    (prim-apply cons x (prim-apply vector-ref x 0))) => "(#(1 2 3) . 1)\n"]
  ["Hello World" => "\"Hello World\"\n"]
- ['("Hello" "World") => "(\"Hello\" \"World\" . ())\n"]
-)
+ ['("Hello" "World") => "(\"Hello\" \"World\" . ())\n"])
