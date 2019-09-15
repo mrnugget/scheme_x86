@@ -16,6 +16,10 @@
   (apply fprintf (compile-port) (list "~a:" label))
   (newline (compile-port)))
 
+(define (emit-local name)
+  (format (compile-port) ".local ~a\n" name)
+  (format (compile-port) ".comm ~a,4,4\n" name))
+
 (define fixnum-tag 0)
 (define fixnum-shift 2)
 (define fixnum-mask 3)
@@ -398,9 +402,10 @@
           [free-var (emit "movl ~a(%edx), %eax" (caddr p))]))))
 
 (define (emit-constant-ref expr stack-index env)
-  ;; TODO: NOOP FOR NOW
-  ; (emit-identifier (cadr expr) stack-index env))
-  '())
+  ;; Load the label into %eax
+  (emit-identifier (cadr expr) stack-index env)
+  ;; Now load what's at the label into %eax
+  (emit "movl (%eax), %eax"))
 
 (define (emit-expr expr stack-index env)
   ; (display (format "\n(emit-expr expr=~a stack-index=~a env=~a)\n" expr stack-index env))
@@ -444,19 +449,27 @@
 
        (emit-label name)
        (emit-expr body locals-start inner-env)
-       (emit "ret")))))
+       (emit "ret")))
+    ([datum]
+     (let ([name (car label)])
+       (emit-local name)))))
+
+(define (emit-constant-init expr stack-index env)
+  (let ([name (cadr expr)]
+        [value-expr (caddr expr)])
+    ; (emit-local name)
+    (emit-expr value-expr stack-index env)
+    (emit "mov %eax, ~s" name)))
 
 (define (emit-program labels constant-inits body env)
-  (display (format "labels=~a\n" labels))
-  (display (format "(map car labels)=~a\n" (map car labels)))
   (let* ([env-with-labels (extend-env-labels (map car labels) env)])
-    ; (display (format "env-with-labels=~a\n" env-with-labels))
     (emit ".text")
     (emit ".p2align 4,,15")
-    (emit ".globl scheme_entry")
-    (emit ".type scheme_entry, @function")
 
     (for-each (lambda (l) (emit-label-code l env-with-labels)) labels)
+
+    (emit ".globl scheme_entry")
+    (emit ".type scheme_entry, @function")
 
     (emit-label "scheme_entry")
     ; Save registers
@@ -468,6 +481,11 @@
     (emit "movl 16(%esp), %esi")
 
     ; Compile!
+
+    ; First, the initialize the constants
+    (for-each (lambda (c) (emit-constant-init c (- wordsize) env-with-labels)) constant-inits)
+
+    ; Then the body
     (emit-expr body (- wordsize) env-with-labels)
 
     ; Restore registers
@@ -598,7 +616,7 @@
     (cond
       [(immediate? expr) expr]
       [(pair? expr)
-      (list 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
+      (list 'prim-apply 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
       [(string? expr)
       (cons 'string (map translate-quote (string->list expr)))]
       [else (error 'translate-quote (format "don't know how to quote ~s" expr))]))
