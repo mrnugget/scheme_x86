@@ -300,12 +300,6 @@
     (set! label-count (+ label-count 1))
     l))
 
-(define name-count 0)
-(define (unique-name prefix)
-  (let ([l (string->symbol (format "c_~a" name-count))])
-    (set! name-count (+ name-count 1))
-    l))
-
 (define (emit-if expr stack-index env)
   (let ([alternative-label (unique-label)]
         [end-label (unique-label)])
@@ -689,7 +683,6 @@
 
 (define (precompile expr)
   (set! label-count 0)
-  (set! name-count 0)
 
   (precompile-transform-tailcalls
     (precompile-add-code-labels
