@@ -5,12 +5,12 @@
  [(let ([x '(1 2 3)]) x) => "(1 2 3 . ())\n"]
  [(let ([f (lambda () '(1 2 3))])
    (f)) => "(1 2 3 . ())\n"]
-;  [(let ([f (lambda () '(1 2 3))])
-;    (prim-apply eq? (f) (f))) => "#t\n"]
  [(let ([f (lambda ()
              (lambda () 
                '(1 2 3)))])
    ((f))) => "(1 2 3 . ())\n"]
+ [(let ([f (lambda () '(1 2 3))])
+   (prim-apply eq? (f) (f))) => "#t\n"]
 ;  [(let ([x '#(1 2 3)]) 
 ;     (cons x (vector-ref x 0))) => "(#(1 2 3) . 1)\n"]
 ;  ["Hello World" => "\"Hello World\"\n"]

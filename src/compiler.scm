@@ -112,6 +112,12 @@
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "addl ~a(%esp), %eax" stack-index)]
+    [(eq?)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "movl %eax, ~a(%esp)" stack-index)
+     (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
+     (emit "cmpl ~a(%esp), %eax" stack-index)
+     (emit-eax-to-bool)]
     [(cons)
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, ~a(%esp)" stack-index)
@@ -225,6 +231,9 @@
 
 (define (emit-eax-eq? val)
   (emit "cmpl $~a, %eax" val)
+  (emit-eax-to-bool))
+
+(define (emit-eax-to-bool)
   (emit "movl $0, %eax")
   (emit "sete %al")
   (emit "sall $~a, %eax" bool-shift)
