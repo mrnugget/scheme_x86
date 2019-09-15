@@ -615,17 +615,43 @@
   (define label-forms '())
   (define constant-inits '())
 
+  ;; `string-constant->make-string` rewrites `string` expressions into
+  ;; a `make-string` expression with multiple `string-set` following:
+  ;; Example:
+  ;; input: (string "Hello World")
+  ;; output:
+  ;;  (let ([s (prim-apply make-string 11)])
+  ;;     (prim-apply string-set! s 0 #\H)
+  ;;     (prim-apply string-set! s 1 #\e)
+  ;;     (prim-apply string-set! s 2 #\l)
+  ;;     (prim-apply string-set! s 3 #\l)
+  ;;     (prim-apply string-set! s 4 #\o)
+  ;;     (prim-apply string-set! s 5 #\space)
+  ;;     (prim-apply string-set! s 6 #\W)
+  ;;     (prim-apply string-set! s 7 #\o)
+  ;;     (prim-apply string-set! s 8 #\r)
+  ;;     (prim-apply string-set! s 9 #\l)
+  ;;     (prim-apply string-set! s 10 #\d)
+  ;;     s)
+  (define (string-constant->make-string expr)
+    (let* ([chars (map translate-quote (string->list expr))]
+           [len (length chars)])
+      `(let ((s (prim-apply make-string ,len)))
+         ,@(map (lambda (c i) `(prim-apply string-set! s ,i ,c)) chars (iota len))
+         s)))
+
   (define (translate-quote expr)
     (cond
       [(immediate? expr) expr]
       [(pair? expr)
       (list 'prim-apply 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
-      [(string? expr)
-      (cons 'string (map translate-quote (string->list expr)))]
+      [(string? expr) (string-constant->make-string expr)]
       [else (error 'translate-quote (format "don't know how to quote ~s" expr))]))
 
   (define (transform expr)
     (cond
+      ([string? expr] (transform `(quote ,expr)))
+
       ([not (list? expr)] expr)
       ([null? expr] expr)
 

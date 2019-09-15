@@ -61,7 +61,10 @@
    =>
    (labels ((label_0 (datum))
             (label_1 (code () () (constant-ref label_0))))
-          ((constant-init label_0 (prim-apply cons 1 (string #\H))))
+          ((constant-init label_0 (prim-apply cons
+                                              1
+                                              (let ((s (prim-apply make-string 1)))
+                                                (prim-apply string-set! s 0 #\H) s))))
           (let ((f (closure label_1)))
             (funcall eq? (funcall f) (funcall f))))]
   )
