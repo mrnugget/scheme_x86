@@ -658,7 +658,7 @@
 
   (define (transform expr)
     (cond
-      ([string? expr] (transform `(quote ,expr)))
+      ([or (string? expr) (vector? expr)] (transform `(quote ,expr)))
 
       ([not (list? expr)] expr)
       ([null? expr] expr)
