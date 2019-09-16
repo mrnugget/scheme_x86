@@ -67,7 +67,7 @@ void print_value(int val) {
             print_value(car);
         }
 
-        if ((cdr & object_mask) != object_tag_pair) {
+        if (cdr != empty_list && (cdr & object_mask) != object_tag_pair) {
             printf(" . ");
             print_value(cdr);
         }
