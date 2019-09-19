@@ -57,8 +57,16 @@
 (define (test-with-precompiled-output test-id expr expected-output)
   (let ((actual (precompile expr)))
     (unless (equal? expected-output actual)
-      (error 'test (format "Precompile output mismatch for test ~s:\n\texpected=~s\n\t     got=~s"
-                           test-id expected-output actual)))))
+      (begin
+        (parameterize ([pretty-initial-indent 2]
+                       [pretty-standard-indent 2])
+          (display "\n========== Output mismatch: =============\n")
+          (display "EXPECTED:\n  ")
+          (pretty-print expected-output)
+          (display "GOT:\n  ")
+          (pretty-print actual))
+        (display "\n")
+        (error 'test (format "Precompile output mismatch for test '~s'" test-id))))))
 
 (define (test-one test-id test)
   (let ([expr (car test)]

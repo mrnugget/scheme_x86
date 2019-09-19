@@ -498,6 +498,7 @@
 
     (emit "ret")))
 
+(define special-non-free-symbols '(quote))
 (define (precompile-annotate-free-vars expr free-vars)
   (cond
     ([null? expr] (list expr '()))
@@ -527,7 +528,7 @@
 
             ; free variables list shouldn't include args, even though they'll be
             ; output as free when analyzing the body
-            (inner-free (filter (lambda (v) (not (memq v args)))
+            (inner-free (filter (lambda (v) (and (not (memq v args)) (not (memq v special-non-free-symbols))))
                                 (cadr annotated-body))))
        (list `(lambda ,args ,inner-free ,(car annotated-body))
              inner-free)))

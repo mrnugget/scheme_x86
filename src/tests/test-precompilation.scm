@@ -57,14 +57,40 @@
 
 (add-tests-with-precompiled-output "constants to labels"
   [(let ((f (lambda () (quote (1 . "H")))))
-     (eq? (f) (f)))
+     (prim-apply eq? (f) (f)))
    =>
-   (labels ((label_0 (datum))
-            (label_1 (code () () (constant-ref label_0))))
-          ((constant-init label_0 (prim-apply cons
-                                              1
-                                              (let ((s (prim-apply make-string 1)))
-                                                (prim-apply string-set! s 0 #\H) s))))
-          (let ((f (closure label_1)))
-            (funcall eq? (funcall f) (funcall f))))]
-  )
+   (labels
+     ((label_0 (datum))
+      (label_1 (code () () (constant-ref label_0))))
+     ((constant-init
+        label_0
+        (prim-apply
+          cons
+          1
+          (let ([s (prim-apply make-string 1)])
+            (prim-apply string-set! s 0 #\H)
+            s))))
+     (let ([f (closure label_1)])
+       (prim-apply eq? (funcall f) (funcall f))))])
+
+(add-tests-with-precompiled-output "all precompilations in one"
+  [(let ([g (lambda (x) (prim-apply + x x))]
+        [f (lambda () (quote (1 . "H")))])
+    ((lambda (y) (g y)) 5)
+    (prim-apply eq? (f) (f)))
+  => (labels
+       ((label_0 (datum))
+        (label_3 (code (y) (g) (tailcall g y)))
+        (label_2 (code () () (constant-ref label_0)))
+        (label_1 (code (x) () (prim-apply + x x))))
+     ((constant-init
+        label_0
+        (prim-apply
+          cons
+          1
+          (let ([s (prim-apply make-string 1)])
+            (prim-apply string-set! s 0 #\H)
+            s))))
+       (let ([g (closure label_1)] [f (closure label_2)])
+         (funcall (closure label_3 g) 5)
+         (prim-apply eq? (funcall f) (funcall f))))])
