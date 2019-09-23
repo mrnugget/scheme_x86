@@ -54,7 +54,13 @@
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
 
-(define (lambda? x) (eq? (car x) 'lambda))
+(define (lambda? x) (and (list? x) (eq? (car x) 'lambda)))
+(define (lambda-body x) (cddr x))
+(define (lambda-vars expr) (cadr expr))
+
+(define (set? x) (and (list? x) (eq? (car x) 'set!)))
+(define (set-variable x) (cadr x))
+(define (set-value x) (caddr x))
 
 (define (remove-duplicates xs)
   (if (null? xs)
@@ -240,8 +246,8 @@
   (emit "orl $~a, %eax" bool-tag))
 
 (define (identifier? expr) (symbol? expr))
-(define (let? expr) (eq? 'let (car expr)))
-(define (quote? expr) (eq? 'quote (car expr)))
+(define (let? expr) (and (list? expr) (eq? 'let (car expr))))
+(define (quote? expr) (and (list? expr) (eq? 'quote (car expr))))
 (define (let-bindings expr) (cadr expr))
 (define (let-body expr) (cddr expr))
 (define (binding-ident b) (car b))
@@ -566,7 +572,6 @@
 
 (define (precompile-add-code-labels expr)
   (let* ([existing-label-forms (cadr expr)]
-         ;; TODO this breaks as soon as we have more than one constant init
          [constant-inits (caddr expr)]
          [body-form (cadddr expr)])
   (define label-forms '())
@@ -716,13 +721,65 @@
 
     `(labels ,(map transform-label label-forms) ,constant-inits ,body-form)))
 
+
+(define (assignment-conversion expr)
+  (let ([assigned '()])
+    (define (set-variable-assigned! v)
+      (unless (member v assigned)
+              (set! assigned (cons v assigned))))
+    (define (variable-assigned v)
+      (member v assigned))
+
+    (trace-define (mark expr)
+      (if (null? expr) expr
+          (begin
+            (when (set? expr) (set-variable-assigned! (set-variable expr)))
+            (when (list? expr) (for-each mark expr)))))
+
+    (trace-define (transform expr)
+      (cond
+       [(null? expr) expr]
+       [(set? expr) 
+        `(prim-apply set-car! ,(set-variable expr) ,(transform (set-value expr)))]
+       [(lambda? expr)
+        (let* ([vars (filter variable-assigned (lambda-vars expr))])
+          `(lambda
+             ,(lambda-vars expr)
+             ,@(if (null? vars)
+                  (transform (lambda-body expr))
+                  (list `(let
+                     ,(map (lambda (v) (list v `(prim-apply cons ,v #f))) vars)
+                     ,@(transform (lambda-body expr)))))))]
+       [(let? expr)
+        `(let
+           ,(map (lambda (binding)
+                   (let ([var (car binding)]
+                         [val (transform (cadr binding))])
+                     (list var
+                           (if (variable-assigned var)
+                               `(prim-apply cons ,val #f)
+                               val))))
+                 (let-bindings expr))
+           ,@(transform (let-body expr)))]
+       [(list? expr) (map transform expr)]
+       [(and (symbol? expr) (variable-assigned expr)) `(prim-apply car ,expr)]
+       [else expr]))
+    (mark expr)
+    (transform expr)))
+
+(define (precompile-transform-assignments expr)
+    (assignment-conversion expr))
+
 (define (precompile expr)
   (set! label-count 0)
 
   (precompile-transform-tailcalls
     (precompile-add-code-labels
       (precompile-add-constants
-        (car (precompile-annotate-free-vars expr '()))))))
+        (car (precompile-annotate-free-vars
+               ; expr
+               (precompile-transform-assignments expr)
+               '()))))))
 
 ;; enable precompilation tracing
 ; (trace precompile precompile-transform-tailcalls precompile-add-code-labels precompile-add-constants precompile-annotate-free-vars)
