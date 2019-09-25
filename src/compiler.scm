@@ -788,5 +788,4 @@
 
 (define (compile-program expr)
   (let ([precompiled (precompile expr)])
-    ; (display (format "\nprecompiled=~a\n" precompiled))
     (emit-program (cadr precompiled) (caddr precompiled) (cadddr precompiled) (new-env))))
