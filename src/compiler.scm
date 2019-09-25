@@ -730,13 +730,13 @@
     (define (variable-assigned v)
       (member v assigned))
 
-    (trace-define (mark expr)
+    (define (mark expr)
       (if (null? expr) expr
           (begin
             (when (set? expr) (set-variable-assigned! (set-variable expr)))
             (when (list? expr) (for-each mark expr)))))
 
-    (trace-define (transform expr)
+    (define (transform expr)
       (cond
        [(null? expr) expr]
        [(set? expr) 
