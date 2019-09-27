@@ -417,12 +417,9 @@
   (emit "movl (%eax), %eax"))
 
 (define (emit-expr expr stack-index env)
-  ; (display (format "\n(emit-expr expr=~a stack-index=~a env=~a)\n" expr stack-index env))
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
-        [(identifier? expr)
-         (emit-identifier expr stack-index env)]
-        [(let? expr)
-         (emit-let (let-bindings expr) (let-body expr) stack-index env)]
+        [(identifier? expr) (emit-identifier expr stack-index env)]
+        [(let? expr) (emit-let (let-bindings expr) (let-body expr) stack-index env)]
         [(if? expr) (emit-if expr stack-index env)]
         [(prim-apply? expr) (emit-prim-apply expr stack-index env)]
         [(funcall? expr) (emit-funcall expr stack-index env #f)]
@@ -511,47 +508,39 @@
     (cond
       ([null? expr] (list expr '()))
 
-      ; if the var is bound, then don't add it to the free list
-      ([identifier? expr]
-        (list expr (if (member expr free-vars) '() (list expr))))
+      ([identifier? expr] (list expr (if (member expr free-vars) '() (list expr))))
 
-      ; catch-all for immediates
       ([not (list? expr)] (list expr '()))
 
-      ; handle if form so we don't end up with 'if' as a free var
       ([if? expr]
-      (let* ((parts (map (lambda (expr) (walk-and-annotate expr free-vars)) (cdr expr)))
+       (let* ((parts (map (lambda (expr) (walk-and-annotate expr free-vars)) (cdr expr)))
               (annotated (map car parts))
               (free-vars (map cadr parts)))
-        (list `(if ,@annotated)
-              (remove-duplicates (apply append free-vars)))))
+         (list `(if ,@annotated)
+               (remove-duplicates (apply append free-vars)))))
 
-      ; deal with lambdas
       ([lambda? expr]
-      (let* ((args (cadr expr))
-              (body-form (caddr expr))
+       (let* ([args (cadr expr)]
+              [body-form (caddr expr)]
 
               ; treat the outer environment as unbound 
-              (annotated-body (walk-and-annotate body-form args))
+              [annotated-body (walk-and-annotate body-form args)]
 
               ; free variables list shouldn't include args, even though they'll be
               ; output as free when analyzing the body
-              (inner-free (filter (lambda (v) (and (not (memq v args)) (not (memq v special-non-free-symbols))))
-                                  (cadr annotated-body))))
-        (list `(lambda ,args ,inner-free ,(car annotated-body))
-              inner-free)))
-    ; primitive call - ignore the function, map over args
+              [inner-free (filter (lambda (v) (and (not (memq v args)) (not (memq v special-non-free-symbols))))
+                                  (cadr annotated-body))])
+         (list `(lambda ,args ,inner-free ,(car annotated-body)) inner-free)))
+
       ([prim-apply? expr]
-      (let* ((results (map (lambda (p) (walk-and-annotate p free-vars))
-                            (cddr expr)))
+       (let* ((results (map (lambda (p) (walk-and-annotate p free-vars)) (cddr expr)))
               (annotated (map car results))
               (free (apply append (map cadr results))))
-        (list `(prim-apply ,(cadr expr) ,@annotated)
-              (remove-duplicates free))))
+         (list `(prim-apply ,(cadr expr) ,@annotated)
+               (remove-duplicates free))))
 
-      ; check for let form and apply bindings
       ([let? expr]
-      (let* ((bindings (cadr expr))
+       (let* ((bindings (cadr expr))
               (body-forms (cddr expr))
               (bind-names (map car bindings))
               (bind-bodies (map cadr bindings))
@@ -564,12 +553,12 @@
               (inner-free-vars (append bind-names free-vars))
               (inner-annotated (map (lambda (b) (walk-and-annotate b inner-free-vars)) body-forms)))
 
-        (list `(let ,(map list bind-names new-bodies) ,@(map car inner-annotated))
-              (remove-duplicates (append (apply append (map cadr inner-annotated)) body-free)))))
+         (list `(let ,(map list bind-names new-bodies) ,@(map car inner-annotated))
+               (remove-duplicates (append (apply append (map cadr inner-annotated)) body-free)))))
 
       (else (let* ((results (map (lambda (p) (walk-and-annotate p free-vars)) expr))
-                  (annotated (map car results))
-                  (free (apply append (map cadr results))))
+                   (annotated (map car results))
+                   (free (apply append (map cadr results))))
               (list annotated (remove-duplicates free))))))
 
     (let ([expr-and-vars (walk-and-annotate expr '())])
