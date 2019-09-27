@@ -506,10 +506,8 @@
 (define (precompile-annotate-free-vars expr)
   (define (walk-and-annotate expr free-vars)
     (cond
-      ([null? expr] (list expr '()))
-
+      ([immediate? expr] (list expr '()))
       ([identifier? expr] (list expr (if (member expr free-vars) '() (list expr))))
-
       ([not (list? expr)] (list expr '()))
 
       ([if? expr]
@@ -572,8 +570,9 @@
 
   (define (transform expr)
     (cond
+      ([immediate? expr] expr)
+      ([identifier? expr] expr)
       ([not (list? expr)] expr)
-      ([null? expr] expr)
 
       ([lambda? expr]
        (let* ((arguments (cadr expr))
