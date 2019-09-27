@@ -516,6 +516,12 @@
               [free-vars (cadr results)])
          (list `(if ,@annotated) (remove-duplicates free-vars))))
 
+      ([prim-apply? expr]
+       (let* ([results (walk-and-annotate (cddr expr) free-vars)]
+              [annotated (car results)]
+              [free (cadr results)])
+         (list `(prim-apply ,(cadr expr) ,@annotated) (remove-duplicates free))))
+
       ([lambda? expr]
        (let* ([args (cadr expr)]
               [body-form (caddr expr)]
@@ -529,29 +535,20 @@
                                   (cadr annotated-body))])
          (list `(lambda ,args ,inner-free ,(car annotated-body)) inner-free)))
 
-      ([prim-apply? expr]
-       (let* ([results (walk-and-annotate (cddr expr) free-vars)]
-              [annotated (car results)]
-              [free (cadr results)])
-         (list `(prim-apply ,(cadr expr) ,@annotated) (remove-duplicates free))))
-
       ([let? expr]
-       (let* ((bindings (cadr expr))
-              (body-forms (cddr expr))
-              (bind-names (map car bindings))
-              (bind-bodies (map cadr bindings))
+       (let* ((binding-names (map car (let-bindings expr)))
+              (binding-bodies (map cadr (let-bindings expr)))
 
-              ; analyze all binding bodies
-              (body-free (walk-and-annotate bind-bodies free-vars))
-              ; (body-free (map (lambda (expr) (walk-and-annotate expr free-vars)) bind-bodies))
-              (new-bodies (car body-free))
-              (body-free (cadr body-free))
+              (annotated-bindings (walk-and-annotate binding-bodies free-vars))
+              (new-binding-bodies (car annotated-bindings))
+              (bindings-free-vars (cadr annotated-bindings))
 
-              (inner-free-vars (append bind-names free-vars))
-              (inner-annotated (map (lambda (b) (walk-and-annotate b inner-free-vars)) body-forms)))
+              (annotated-body (walk-and-annotate (let-body expr) (append binding-names free-vars)))
+              (new-body (car annotated-body))
+              (body-free-vars (cadr annotated-body)))
 
-         (list `(let ,(map list bind-names new-bodies) ,@(map car inner-annotated))
-               (remove-duplicates (append (apply append (map cadr inner-annotated)) body-free)))))
+         (list `(let ,(map list binding-names new-binding-bodies) ,@new-body)
+               (remove-duplicates (append body-free-vars bindings-free-vars)))))
 
       (else (let* ((results (map (lambda (p) (walk-and-annotate p free-vars)) expr))
                    (annotated (map car results))
