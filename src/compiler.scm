@@ -501,8 +501,6 @@
 
     (emit "ret")))
 
-(define special-non-free-symbols '(quote))
-
 (define (precompile-annotate-free-vars expr)
   (define (walk-and-annotate expr free-vars)
     (cond
@@ -526,14 +524,13 @@
        (let* ([args (cadr expr)]
               [body-form (caddr expr)]
 
-              ; treat the outer environment as unbound 
-              [annotated-body (walk-and-annotate body-form args)]
+              [results (walk-and-annotate body-form args)]
+              [annotated (car results)]
+              [free (cadr results)]
 
-              ; free variables list shouldn't include args, even though they'll be
-              ; output as free when analyzing the body
-              [inner-free (filter (lambda (v) (and (not (memq v args)) (not (memq v special-non-free-symbols))))
-                                  (cadr annotated-body))])
-         (list `(lambda ,args ,inner-free ,(car annotated-body)) inner-free)))
+              [free-without-args (filter (lambda (v) (not (memq v args))) free)])
+         (list `(lambda ,args ,free-without-args ,annotated)
+               free-without-args)))
 
       ([let? expr]
        (let* ([binding-names (map car (let-bindings expr))]
