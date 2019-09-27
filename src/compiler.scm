@@ -511,11 +511,10 @@
       ([not (list? expr)] (list expr '()))
 
       ([if? expr]
-       (let* ((parts (map (lambda (expr) (walk-and-annotate expr free-vars)) (cdr expr)))
-              (annotated (map car parts))
-              (free-vars (map cadr parts)))
-         (list `(if ,@annotated)
-               (remove-duplicates (apply append free-vars)))))
+       (let* ([results (walk-and-annotate (cdr expr) free-vars)]
+              [annotated (car results)]
+              [free-vars (cadr results)])
+         (list `(if ,@annotated) (remove-duplicates free-vars))))
 
       ([lambda? expr]
        (let* ([args (cadr expr)]
@@ -531,11 +530,10 @@
          (list `(lambda ,args ,inner-free ,(car annotated-body)) inner-free)))
 
       ([prim-apply? expr]
-       (let* ((results (map (lambda (p) (walk-and-annotate p free-vars)) (cddr expr)))
-              (annotated (map car results))
-              (free (apply append (map cadr results))))
-         (list `(prim-apply ,(cadr expr) ,@annotated)
-               (remove-duplicates free))))
+       (let* ([results (walk-and-annotate (cddr expr) free-vars)]
+              [annotated (car results)]
+              [free (cadr results)])
+         (list `(prim-apply ,(cadr expr) ,@annotated) (remove-duplicates free))))
 
       ([let? expr]
        (let* ((bindings (cadr expr))
@@ -544,9 +542,10 @@
               (bind-bodies (map cadr bindings))
 
               ; analyze all binding bodies
-              (body-free (map (lambda (expr) (walk-and-annotate expr free-vars)) bind-bodies))
-              (new-bodies (map car body-free))
-              (body-free (apply append (map cadr body-free)))
+              (body-free (walk-and-annotate bind-bodies free-vars))
+              ; (body-free (map (lambda (expr) (walk-and-annotate expr free-vars)) bind-bodies))
+              (new-bodies (car body-free))
+              (body-free (cadr body-free))
 
               (inner-free-vars (append bind-names free-vars))
               (inner-annotated (map (lambda (b) (walk-and-annotate b inner-free-vars)) body-forms)))
