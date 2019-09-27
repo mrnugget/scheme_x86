@@ -536,23 +536,23 @@
          (list `(lambda ,args ,inner-free ,(car annotated-body)) inner-free)))
 
       ([let? expr]
-       (let* ((binding-names (map car (let-bindings expr)))
-              (binding-bodies (map cadr (let-bindings expr)))
+       (let* ([binding-names (map car (let-bindings expr))]
+              [binding-bodies (map cadr (let-bindings expr))]
 
-              (annotated-bindings (walk-and-annotate binding-bodies free-vars))
-              (new-binding-bodies (car annotated-bindings))
-              (bindings-free-vars (cadr annotated-bindings))
+              [annotated-bindings (walk-and-annotate binding-bodies free-vars)]
+              [new-binding-bodies (car annotated-bindings)]
+              [bindings-free-vars (cadr annotated-bindings)]
 
-              (annotated-body (walk-and-annotate (let-body expr) (append binding-names free-vars)))
-              (new-body (car annotated-body))
-              (body-free-vars (cadr annotated-body)))
+              [annotated-body (walk-and-annotate (let-body expr) (append binding-names free-vars))]
+              [new-body (car annotated-body)]
+              [body-free-vars (cadr annotated-body)])
 
          (list `(let ,(map list binding-names new-binding-bodies) ,@new-body)
                (remove-duplicates (append body-free-vars bindings-free-vars)))))
 
-      (else (let* ((results (map (lambda (p) (walk-and-annotate p free-vars)) expr))
-                   (annotated (map car results))
-                   (free (apply append (map cadr results))))
+      (else (let* ([results (map (lambda (p) (walk-and-annotate p free-vars)) expr)]
+                   [annotated (map car results)]
+                   [free (apply append (map cadr results))])
               (list annotated (remove-duplicates free))))))
 
     (let ([expr-and-vars (walk-and-annotate expr '())])
