@@ -51,14 +51,36 @@
                            (logior (ash val char-shift) char-tag))]
         [else 0]))
 
+(define-syntax define-list-expr-check
+  (syntax-rules ()
+    [(_ check-name expr-s)
+     (define (check-name expr)
+       (and (not (null? expr)) (list? expr) (eq? (car expr) expr-s)))]))
+
+(define-list-expr-check funcall? 'funcall)
+(define-list-expr-check tailcall? 'tailcall)
+(define-list-expr-check constant-ref? 'constant-ref)
+(define-list-expr-check constant-init? 'constant-init)
+(define-list-expr-check closure? 'closure)
+(define-list-expr-check lambda? 'lambda)
+(define-list-expr-check set? 'set!)
+(define-list-expr-check prim-apply? 'prim-apply)
+(define-list-expr-check let? 'let)
+(define-list-expr-check quote? 'quote)
+(define-list-expr-check if? 'if)
+
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
 
-(define (lambda? x) (and (not (null? x)) (list? x) (eq? (car x) 'lambda)))
 (define (lambda-body x) (cddr x))
 (define (lambda-vars expr) (cadr expr))
 
-(define (set? x) (and (not (null? x)) (list? x) (eq? (car x) 'set!)))
+(define (identifier? expr) (symbol? expr))
+(define (let-bindings expr) (cadr expr))
+(define (let-body expr) (cddr expr))
+(define (binding-ident b) (car b))
+(define (binding-value b) (cadr b))
+
 (define (set-variable x) (cadr x))
 (define (set-value x) (caddr x))
 
@@ -68,12 +90,16 @@
       (cons (car xs)
             (remove-duplicates (filter (lambda (el) (not (equal? (car xs) el))) xs)))))
 
-(define (prim-apply? expr) (eq? (car expr) 'prim-apply))
 (define (prim-apply-fn expr) (cadr expr))
 (define (prim-apply-args expr) (cddr expr))
 (define (prim-apply-arg-1 expr) (caddr expr))
 (define (prim-apply-arg-2 expr) (cadddr expr))
 (define (prim-apply-arg-3 expr) (cadddr (cdr expr)))
+
+(define (if-condition expr) (cadr expr))
+(define (if-consequence expr) (caddr expr))
+(define (if-alternative expr) (cadddr expr))
+
 
 (define (emit-prim-apply-args expr stack-index env)
   (for-each
@@ -245,14 +271,6 @@
   (emit "sall $~a, %eax" bool-shift)
   (emit "orl $~a, %eax" bool-tag))
 
-(define (identifier? expr) (symbol? expr))
-(define (let? expr) (and (not (null? expr)) (list? expr) (eq? 'let (car expr))))
-(define (quote? expr) (and (not (null? expr)) (list? expr) (eq? 'quote (car expr))))
-(define (let-bindings expr) (cadr expr))
-(define (let-body expr) (cddr expr))
-(define (binding-ident b) (car b))
-(define (binding-value b) (cadr b))
-
 (define (new-env) '())
 (define (lookup ident env) (assoc ident env))
 
@@ -295,11 +313,6 @@
              (extend-env-var (binding-ident b) stack-index e)
              (- stack-index wordsize))))))
 
-(define (if? expr) (and (not (null? expr)) (list? expr) (eq? 'if (car expr))))
-(define (if-condition expr) (cadr expr))
-(define (if-consequence expr) (caddr expr))
-(define (if-alternative expr) (cadddr expr))
-
 (define label-count 0)
 (define (unique-label)
   (let ([l (string->symbol (format "label_~a" label-count))])
@@ -317,11 +330,6 @@
     (emit-label alternative-label)
     (emit-expr (if-alternative expr) stack-index env)
     (emit-label end-label)))
-
-(define (funcall? expr) (and (not (null? expr)) (list? expr) (eq? (car expr) 'funcall)))
-(define (tailcall? expr) (and (not (null? expr)) (list? expr) (eq? (car expr) 'tailcall)))
-(define (constant-ref? expr) (and (not (null? expr)) (list? expr) (eq? (car expr) 'constant-ref)))
-(define (constant-init? expr) (and (not (null? expr)) (list? expr) (eq? (car expr) 'constant-init)))
 
 (define (emit-funcall expr stack-index env tailcall)
   (let* ([call-target (cadr expr)]
@@ -370,8 +378,6 @@
           ; restore the stack pointer afterwards and reload our current closure
           (emit "addl $~a, %esp" (- stack-index))
           (emit "movl ~a(%esp), %edx" stack-index)))))
-
-(define (closure? expr) (eq? (car expr) 'closure))
 
 (define (emit-closure expr stack-index env)
   (let ([label (cadr expr)]
