@@ -80,21 +80,23 @@
     (let ([p (f 0)]) ((prim-apply car p) 12) ((prim-apply cdr p))))
   =>
   (labels
-    ((label_2
-        (code (c)
-              ()
-              (let ([c (prim-apply cons c #f)])
-                (prim-apply
-                  cons
-                  (closure label_0 c)
-                  (closure label_1 c)))))
-      (label_1 (code () (c) (prim-apply car c)))
-      (label_0 (code (v) (c) (prim-apply set-car! c v))))
-    ()
-    (let ([f (closure label_2)])
-      (let ([p (funcall f 0)])
-        (funcall (prim-apply car p) 12)
-        (funcall (prim-apply cdr p)))))])
+     ((label_2
+         (code (c)
+               ()
+               (let ([c (let ([v (prim-apply make-vector 1)])
+                           (prim-apply vector-set! v 0 c)
+                           v)])
+                  (prim-apply
+                     cons
+                     (closure label_0 c)
+                     (closure label_1 c)))))
+        (label_1 (code () (c) (prim-apply vector-ref c 0)))
+        (label_0 (code (v) (c) (prim-apply vector-set! c 0 v))))
+     ()
+     (let ([f (closure label_2)])
+        (let ([p (funcall f 0)])
+           (funcall (prim-apply car p) 12)
+           (funcall (prim-apply cdr p)))))])
 
 (add-tests-with-precompiled-output "all precompilations in one"
   [(let ([g (lambda (x) (prim-apply + x x))]

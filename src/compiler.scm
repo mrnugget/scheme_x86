@@ -722,10 +722,15 @@
             (when (set? expr) (set-variable-assigned! (set-variable expr)))
             (when (list? expr) (for-each mark expr)))))
 
+    (define (make-single-elem-vector elem)
+      `(let ([v (prim-apply make-vector 1)])
+         (prim-apply vector-set! v 0 ,elem)
+         v))
+
     (define (transform expr)
       (cond
         [(set? expr) 
-         `(prim-apply set-car! ,(set-variable expr) ,(transform (set-value expr)))]
+         `(prim-apply vector-set! ,(set-variable expr) 0 ,(transform (set-value expr)))]
         [(lambda? expr)
          (let* ([vars (filter variable-assigned (lambda-vars expr))])
            `(lambda
@@ -733,7 +738,7 @@
               ,@(if (null? vars)
                     (transform (lambda-body expr))
                     (list `(let
-                             ,(map (lambda (v) (list v `(prim-apply cons ,v #f))) vars)
+                             ,(map (lambda (v) (list v (make-single-elem-vector v))) vars)
                              ,@(transform (lambda-body expr)))))))]
         [(let? expr)
          `(let
@@ -742,12 +747,12 @@
                           [val (transform (cadr binding))])
                       (list var
                             (if (variable-assigned var)
-                                `(prim-apply cons ,val #f)
+                                (make-single-elem-vector val)
                                 val))))
                   (let-bindings expr))
             ,@(transform (let-body expr)))]
         [(list? expr) (map transform expr)]
-        [(and (symbol? expr) (variable-assigned expr)) `(prim-apply car ,expr)]
+        [(and (symbol? expr) (variable-assigned expr)) `(prim-apply vector-ref ,expr 0)]
         [else expr]))
 
     (mark expr)
