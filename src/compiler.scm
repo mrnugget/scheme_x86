@@ -702,7 +702,7 @@
     `(labels ,(map transform-label label-forms) ,constant-inits ,body-form)))
 
 
-(define (assignment-conversion expr)
+(define (precompile-transform-assignments expr)
   (let ([assigned '()])
     (define (set-variable-assigned! v)
       (unless (member v assigned)
@@ -747,9 +747,6 @@
 
     (mark expr)
     (transform expr)))
-
-(define (precompile-transform-assignments expr)
-    (assignment-conversion expr))
 
 (define (precompile expr)
   (set! label-count 0)
