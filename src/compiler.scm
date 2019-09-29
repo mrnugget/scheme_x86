@@ -295,7 +295,7 @@
              (extend-env-var (binding-ident b) stack-index e)
              (- stack-index wordsize))))))
 
-(define (if? expr) (eq? 'if (car expr)))
+(define (if? expr) (and (list? expr) (eq? 'if (car expr))))
 (define (if-condition expr) (cadr expr))
 (define (if-consequence expr) (caddr expr))
 (define (if-alternative expr) (cadddr expr))
@@ -318,10 +318,10 @@
     (emit-expr (if-alternative expr) stack-index env)
     (emit-label end-label)))
 
-(define (funcall? expr) (eq? (car expr) 'funcall))
-(define (tailcall? expr) (eq? (car expr) 'tailcall))
-(define (constant-ref? expr) (eq? (car expr) 'constant-ref))
-(define (constant-init? expr) (eq? (car expr) 'constant-init))
+(define (funcall? expr) (and (list? expr) (eq? (car expr) 'funcall)))
+(define (tailcall? expr) (and (list? expr) (eq? (car expr) 'tailcall)))
+(define (constant-ref? expr) (and (list? expr) (eq? (car expr) 'constant-ref)))
+(define (constant-init? expr) (and (list? expr) (eq? (car expr) 'constant-init)))
 
 (define (emit-funcall expr stack-index env tailcall)
   (let* ([call-target (cadr expr)]
@@ -682,15 +682,9 @@
 
     (define (transform expr)
       (cond
-        ([not (list? expr)] expr)
-
         ([if? expr] `(if ,(cadr expr) ,@(map transform (cddr expr))))
-
-        ([let? expr]
-         (let ([rev (reverse expr)])
-           (reverse (cons (transform (car rev)) (cdr rev)))))
-        ([constant-ref? expr] expr)
-        ([constant-init? expr] expr)
+        ([let? expr] (let ([rev (reverse expr)])
+                       (reverse (cons (transform (car rev)) (cdr rev)))))
         ([funcall? expr] (cons 'tailcall (cdr expr)))
         (else expr)))
 
