@@ -54,11 +54,11 @@
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
 
-(define (lambda? x) (and (list? x) (eq? (car x) 'lambda)))
+(define (lambda? x) (and (not (null? x)) (list? x) (eq? (car x) 'lambda)))
 (define (lambda-body x) (cddr x))
 (define (lambda-vars expr) (cadr expr))
 
-(define (set? x) (and (list? x) (eq? (car x) 'set!)))
+(define (set? x) (and (not (null? x)) (list? x) (eq? (car x) 'set!)))
 (define (set-variable x) (cadr x))
 (define (set-value x) (caddr x))
 
@@ -246,8 +246,8 @@
   (emit "orl $~a, %eax" bool-tag))
 
 (define (identifier? expr) (symbol? expr))
-(define (let? expr) (and (list? expr) (eq? 'let (car expr))))
-(define (quote? expr) (and (list? expr) (eq? 'quote (car expr))))
+(define (let? expr) (and (not (null? expr)) (list? expr) (eq? 'let (car expr))))
+(define (quote? expr) (and (not (null? expr)) (list? expr) (eq? 'quote (car expr))))
 (define (let-bindings expr) (cadr expr))
 (define (let-body expr) (cddr expr))
 (define (binding-ident b) (car b))
@@ -295,7 +295,7 @@
              (extend-env-var (binding-ident b) stack-index e)
              (- stack-index wordsize))))))
 
-(define (if? expr) (and (list? expr) (eq? 'if (car expr))))
+(define (if? expr) (and (not (null? expr)) (list? expr) (eq? 'if (car expr))))
 (define (if-condition expr) (cadr expr))
 (define (if-consequence expr) (caddr expr))
 (define (if-alternative expr) (cadddr expr))
@@ -318,10 +318,10 @@
     (emit-expr (if-alternative expr) stack-index env)
     (emit-label end-label)))
 
-(define (funcall? expr) (and (list? expr) (eq? (car expr) 'funcall)))
-(define (tailcall? expr) (and (list? expr) (eq? (car expr) 'tailcall)))
-(define (constant-ref? expr) (and (list? expr) (eq? (car expr) 'constant-ref)))
-(define (constant-init? expr) (and (list? expr) (eq? (car expr) 'constant-init)))
+(define (funcall? expr) (and (not (null? expr)) (list? expr) (eq? (car expr) 'funcall)))
+(define (tailcall? expr) (and (not (null? expr)) (list? expr) (eq? (car expr) 'tailcall)))
+(define (constant-ref? expr) (and (not (null? expr)) (list? expr) (eq? (car expr) 'constant-ref)))
+(define (constant-init? expr) (and (not (null? expr)) (list? expr) (eq? (car expr) 'constant-init)))
 
 (define (emit-funcall expr stack-index env tailcall)
   (let* ([call-target (cadr expr)]
@@ -718,7 +718,6 @@
 
     (define (transform expr)
       (cond
-        [(null? expr) expr]
         [(set? expr) 
          `(prim-apply set-car! ,(set-variable expr) ,(transform (set-value expr)))]
         [(lambda? expr)
