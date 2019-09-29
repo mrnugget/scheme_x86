@@ -706,9 +706,9 @@
   (let ([assigned '()])
     (define (set-variable-assigned! v)
       (unless (member v assigned)
-              (set! assigned (cons v assigned))))
-    (define (variable-assigned v)
-      (member v assigned))
+        (set! assigned (cons v assigned))))
+
+    (define (variable-assigned v) (member v assigned))
 
     (define (mark expr)
       (if (null? expr) expr
@@ -718,32 +718,33 @@
 
     (define (transform expr)
       (cond
-       [(null? expr) expr]
-       [(set? expr) 
-        `(prim-apply set-car! ,(set-variable expr) ,(transform (set-value expr)))]
-       [(lambda? expr)
-        (let* ([vars (filter variable-assigned (lambda-vars expr))])
-          `(lambda
-             ,(lambda-vars expr)
-             ,@(if (null? vars)
-                  (transform (lambda-body expr))
-                  (list `(let
-                     ,(map (lambda (v) (list v `(prim-apply cons ,v #f))) vars)
-                     ,@(transform (lambda-body expr)))))))]
-       [(let? expr)
-        `(let
-           ,(map (lambda (binding)
-                   (let ([var (car binding)]
-                         [val (transform (cadr binding))])
-                     (list var
-                           (if (variable-assigned var)
-                               `(prim-apply cons ,val #f)
-                               val))))
-                 (let-bindings expr))
-           ,@(transform (let-body expr)))]
-       [(list? expr) (map transform expr)]
-       [(and (symbol? expr) (variable-assigned expr)) `(prim-apply car ,expr)]
-       [else expr]))
+        [(null? expr) expr]
+        [(set? expr) 
+         `(prim-apply set-car! ,(set-variable expr) ,(transform (set-value expr)))]
+        [(lambda? expr)
+         (let* ([vars (filter variable-assigned (lambda-vars expr))])
+           `(lambda
+              ,(lambda-vars expr)
+              ,@(if (null? vars)
+                    (transform (lambda-body expr))
+                    (list `(let
+                             ,(map (lambda (v) (list v `(prim-apply cons ,v #f))) vars)
+                             ,@(transform (lambda-body expr)))))))]
+        [(let? expr)
+         `(let
+            ,(map (lambda (binding)
+                    (let ([var (car binding)]
+                          [val (transform (cadr binding))])
+                      (list var
+                            (if (variable-assigned var)
+                                `(prim-apply cons ,val #f)
+                                val))))
+                  (let-bindings expr))
+            ,@(transform (let-body expr)))]
+        [(list? expr) (map transform expr)]
+        [(and (symbol? expr) (variable-assigned expr)) `(prim-apply car ,expr)]
+        [else expr]))
+
     (mark expr)
     (transform expr)))
 
