@@ -762,6 +762,10 @@
 (define (precompile-macro-expansion expr)
   (define (transform expr)
     (cond
+      [(lambda? expr)
+       `(lambda ,(lambda-vars expr) ,@(map transform (lambda-body expr)))]
+      ([prim-apply? expr]
+       `(prim-apply ,(prim-apply-fn expr) ,@(map transform (prim-apply-args expr))))
       [(let? expr)
        `(let ,(let-bindings expr) ,@(map transform (let-body expr)))]
       [(let*? expr)

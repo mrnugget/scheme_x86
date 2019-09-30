@@ -21,4 +21,13 @@
         ()
         ()
         (let ([result (let ([x 1]) (let ([y 2]) (prim-apply + x y)))])
-          (let ([z 3]) (prim-apply + result z))))])
+          (let ([z 3]) (prim-apply + result z))))]
+
+  [(lambda (z) (prim-apply + z (let* ([x 1] [y 2]) (prim-apply + x y))))
+   => (labels
+        ((label_0
+           (code (z)
+                 ()
+                 (prim-apply + z (let ([x 1]) (let ([y 2]) (prim-apply + x y)))))))
+        ()
+        (closure label_0))])
