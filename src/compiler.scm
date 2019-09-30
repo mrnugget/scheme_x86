@@ -760,19 +760,19 @@
     (transform expr)))
 
 (define (precompile-macro-expansion expr)
-  (trace-define (transform expr)
+  (define (transform expr)
     (cond
       [(let? expr)
        `(let ,(let-bindings expr) ,@(map transform (let-body expr)))]
       [(let*? expr)
-       (let ([first-binding (car (let-bindings expr))]
-             [rest-bindings (cdr (let-bindings expr))])
+       (let* ([first-binding (car (let-bindings expr))]
+              [transformed-first-binding (list (list (car first-binding)
+                                                     (transform (cadr first-binding))))]
+              [rest-bindings (cdr (let-bindings expr))])
          (transform (if (null? rest-bindings)
-             `(let ,(list (list (car first-binding)
-                                (transform (cadr first-binding))))
+             `(let ,transformed-first-binding
                 ,@(map transform (let-body expr)))
-             `(let ,(list (list (car first-binding)
-                                (transform (cadr first-binding))))
+             `(let ,transformed-first-binding
                 (let* ,rest-bindings ,@(let-body expr))))))]
       [else expr]))
 
