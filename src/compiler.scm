@@ -66,6 +66,7 @@
 (define-list-expr-check set? 'set!)
 (define-list-expr-check prim-apply? 'prim-apply)
 (define-list-expr-check let? 'let)
+(define-list-expr-check let*? 'let*)
 (define-list-expr-check quote? 'quote)
 (define-list-expr-check if? 'if)
 
@@ -758,6 +759,26 @@
     (mark expr)
     (transform expr)))
 
+(define (precompile-macro-expansion expr)
+  (trace-define (transform expr)
+    (cond
+      [(let? expr)
+       `(let ,(let-bindings expr)
+                      ,@(map transform (let-body expr)))]
+      [(let*? expr)
+       (let ([first-binding (car (let-bindings expr))]
+             [rest-bindings (cdr (let-bindings expr))])
+         (transform (if (null? rest-bindings)
+             `(let ,(list (list (car first-binding)
+                                (transform (cadr first-binding))))
+                ,@(map transform (let-body expr)))
+             `(let ,(list (list (car first-binding)
+                                (transform (cadr first-binding))))
+                (let* ,rest-bindings ,@(let-body expr))))))]
+      [else expr]))
+
+  (transform expr))
+
 (define (precompile expr)
   (set! label-count 0)
 
@@ -765,7 +786,8 @@
     (precompile-add-code-labels
       (precompile-add-constants
         (precompile-annotate-free-vars
-          (precompile-transform-assignments expr))))))
+          (precompile-transform-assignments
+            (precompile-macro-expansion expr)))))))
 
 (define (compile-program expr)
   (let ([precompiled (precompile expr)])
