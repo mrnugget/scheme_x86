@@ -69,6 +69,7 @@
 (define-list-expr-check let*? 'let*)
 (define-list-expr-check quote? 'quote)
 (define-list-expr-check if? 'if)
+(define-list-expr-check and? 'and)
 
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
@@ -762,6 +763,8 @@
 (define (precompile-macro-expansion expr)
   (define (transform expr)
     (cond
+      [(if? expr)
+       `(if ,(cadr expr) ,@(map transform (cddr expr)))]
       [(lambda? expr)
        `(lambda ,(lambda-vars expr) ,@(map transform (lambda-body expr)))]
       ([prim-apply? expr]
@@ -778,6 +781,11 @@
                 ,@(map transform (let-body expr)))
              `(let ,transformed-first-binding
                 (let* ,rest-bindings ,@(let-body expr))))))]
+      [(and? expr)
+       (cond [(null? (cdr expr)) #t]
+             [(null? (cddr expr)) (transform (cadr expr))]
+             [else
+               (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f))])]
       [else expr]))
 
   (transform expr))
