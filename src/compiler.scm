@@ -763,8 +763,7 @@
   (trace-define (transform expr)
     (cond
       [(let? expr)
-       `(let ,(let-bindings expr)
-                      ,@(map transform (let-body expr)))]
+       `(let ,(let-bindings expr) ,@(map transform (let-body expr)))]
       [(let*? expr)
        (let ([first-binding (car (let-bindings expr))]
              [rest-bindings (cdr (let-bindings expr))])
