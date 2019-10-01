@@ -764,7 +764,9 @@
   (define (transform expr)
     (cond
       [(if? expr)
-       `(if ,(cadr expr) ,@(map transform (cddr expr)))]
+       `(if ,(transform (if-condition expr))
+            ,(transform (if-consequence expr))
+            ,(transform (if-alternative expr)))]
       [(lambda? expr)
        `(lambda ,(lambda-vars expr) ,@(map transform (lambda-body expr)))]
       ([prim-apply? expr]
@@ -777,15 +779,12 @@
                                                      (transform (cadr first-binding))))]
               [rest-bindings (cdr (let-bindings expr))])
          (transform (if (null? rest-bindings)
-             `(let ,transformed-first-binding
-                ,@(map transform (let-body expr)))
-             `(let ,transformed-first-binding
-                (let* ,rest-bindings ,@(let-body expr))))))]
+             `(let ,transformed-first-binding ,@(map transform (let-body expr)))
+             `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))))]
       [(and? expr)
        (cond [(null? (cdr expr)) #t]
              [(null? (cddr expr)) (transform (cadr expr))]
-             [else
-               (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f))])]
+             [else (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f))])]
       [else expr]))
 
   (transform expr))
