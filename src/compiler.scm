@@ -471,7 +471,6 @@
 (define (emit-constant-init expr stack-index env)
   (let ([name (cadr expr)]
         [value-expr (caddr expr)])
-    ; (emit-local name)
     (emit-expr value-expr stack-index env)
     (emit "mov %eax, ~s" name)))
 
