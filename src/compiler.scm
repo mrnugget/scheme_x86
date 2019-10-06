@@ -487,8 +487,8 @@
 
 (define (emit-primitive-init name stack-index env)
   (let ([label (primitive-label name)]
-        [code-label (primitive-code-label name)])
-    (emit-expr `(closure ,code-label) stack-index env)
+        [init-label (primitive-init-label name)])
+    (emit-expr `(closure ,init-label) stack-index env)
     (emit "mov %eax, ~s" label)))
 
 (define (emit-constant-init expr stack-index env)
@@ -817,23 +817,31 @@
   (transform expr))
 
 (define (primitive-label name)
-  ;; TODO: replace - with underscore
-  (string->symbol (format "P_~a" name)))
+  (let ([lst (map (lambda (c)
+                    (case c
+                      [(#\-) #\_]
+                      [(#\!) #\b]
+                      [(#\=) #\e]
+                      [(#\>) #\g]
+                      [(#\?) #\p]
+                      [else c]))
+                  (string->list (symbol->string name)))])
+    (string->symbol (list->string lst))))
 
-(define (primitive-code-label name)
+(define (primitive-init-label name)
   ;; TODO: replace - with underscore
-  (string->symbol (format "P_~a_code" name)))
+  (string->symbol (format "~a_init" (primitive-label name))))
 
 (define (primitive-labels primitives)
   (let ([names (map car primitives)])
     (append (map primitive-label names)
-            (map primitive-code-label names))))
+            (map primitive-init-label names))))
 
 (define primitives
   (list
-    (list 'addandaddfour '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
-    (list 'addthree '(lambda (x) (prim-apply + 3 x)))
-    (list 'addfour '(lambda (x) (prim-apply + 1 (addthree x))))))
+    (list 'add-and-add-four '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
+    (list 'add-three '(lambda (x) (prim-apply + 3 x)))
+    (list 'add-four '(lambda (x) (prim-apply + 1 (add-three x))))))
 
 (define (precompile-primitive-refs expr)
   (define (transform expr)
@@ -866,7 +874,7 @@
                labels))
 
   (define (precompile-primitives)
-    (map (lambda (p) (list (primitive-code-label (car p)) (precompile (cadr p))))
+    (map (lambda (p) (list (primitive-init-label (car p)) (precompile (cadr p))))
          primitives))
 
   (let* ((merged-labels (merge-labels (precompile-primitives)))
