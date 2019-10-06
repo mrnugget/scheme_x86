@@ -841,7 +841,11 @@
   (list
     (list 'add-and-add-four '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
     (list 'add-three '(lambda (x) (prim-apply + 3 x)))
-    (list 'add-four '(lambda (x) (prim-apply + 1 (add-three x))))))
+    (list 'add-four '(lambda (x) (prim-apply + 1 (add-three x))))
+    ; (list 'calls-another-lambda '(lambda (x)
+    ;                                (let ((g (lambda (x) (prim-apply + 1 x))))
+    ;                                  (g x))))
+    ))
 
 (define (precompile-primitive-refs expr)
   (define (transform expr)
@@ -877,6 +881,15 @@
     (map (lambda (p) (list (primitive-init-label (car p)) (precompile (cadr p))))
          primitives))
 
+  ;; TODO:
+  ;; for each primitive:
+  ;; - precompile code
+  ;; - emit code labels (locals, lambdas, etc.)
+  ;; - emit global function header (P_<primitive>_init)
+  ;; - emit "body" that leaves closure (or other value) in %eax
+  ;; - move %eax into global label
+  ;; then, when compiling program:
+  ;; - for each defined primitive, call (P_<primitive>_init)
   (let* ((merged-labels (merge-labels (precompile-primitives)))
          (final-labels (map primitive-label (map car primitives))))
     (emit ".text")
