@@ -846,8 +846,6 @@
   (transform expr))
 
 (define (precompile expr)
-  (set! label-count 0)
-
   (precompile-transform-tailcalls
     (precompile-add-code-labels
       (precompile-add-constants
@@ -880,12 +878,16 @@
     (for-each emit-global final-labels)))
 
 (define (compile-primitives-to-file filename)
+  (set! label-count 0)
+
   (let ([p (open-output-file filename 'replace)])
     (parameterize ([compile-port p])
       (compile-primitives primitives))
     (close-output-port p)))
 
 (define (compile-program expr)
+  (set! label-count 0)
+
   (let ([precompiled (precompile expr)])
     (emit-program (cadr precompiled)
                   (caddr precompiled)
