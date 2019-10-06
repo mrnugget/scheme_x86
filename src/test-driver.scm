@@ -55,7 +55,7 @@
                          test-id expected-output (get-string)))))
 
 (define (test-with-precompiled-output test-id expr expected-output)
-  (let ((actual (precompile expr #t)))
+  (let ((actual (precompile expr)))
     (unless (equal? expected-output actual)
       (begin
         (parameterize ([pretty-initial-indent 2]

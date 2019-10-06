@@ -485,6 +485,12 @@
      (let ([name (car label)])
        (emit-local name)))))
 
+(define (emit-primitive-init name stack-index env)
+  (let ([label (primitive-label name)]
+        [code-label (primitive-code-label name)])
+    (emit-expr `(closure ,code-label) stack-index env)
+    (emit "mov %eax, ~s" label)))
+
 (define (emit-constant-init expr stack-index env)
   (let ([name (cadr expr)]
         [value-expr (caddr expr)])
@@ -513,7 +519,12 @@
 
     ; Compile!
 
-    ; First, the initialize the constants
+    ; First, turn primitives in `primitives` library into closures on heap
+    ; This initializes all of them. Possible optimization: only init the ones
+    ; that are used
+    (for-each (lambda (p) (emit-primitive-init (car p) (- wordsize) env-with-labels-and-primitives)) primitives)
+
+    ; Then, initialize the constants
     (for-each (lambda (c) (emit-constant-init c (- wordsize) env-with-labels-and-primitives)) constant-inits)
 
     ; Then the body
@@ -630,7 +641,7 @@
              ,constant-inits
              ,transformed-expr))))
 
-(define (precompile-add-constants expr init-primitives)
+(define (precompile-add-constants expr)
   (define label-forms '())
   (define constant-inits '())
 
@@ -681,15 +692,6 @@
 
       ([not (list? expr)] expr)
       ([null? expr] expr)
-
-      ;; TODO: All of the primitives init stuff should be extracted in its own precompile step
-      [(and init-primitives (primitive-ref? expr))
-       (let* ([primitive-name (cadr expr)]
-              [label (primitive-label primitive-name)]
-              [primitive-init `(closure ,(primitive-code-label primitive-name))])
-         (begin
-           (set! constant-inits (cons `(constant-init ,label ,primitive-init) constant-inits))
-           expr))]
 
       ([and (quote? expr) (immediate? (cdr expr))] (cdr expr))
       ([and (quote? expr) (assoc expr label-forms)] => cadr)
@@ -827,7 +829,10 @@
 
 (define primitives
   (list
-    (list 'addandaddfour '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))))
+    (list 'addandaddfour '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
+    (list 'addthree '(lambda (x) (prim-apply + 3 x)))
+    (list 'addfour '(lambda (x) (prim-apply + 1 (addthree x))))
+    ))
 
 (define (precompile-primitive-refs expr)
   (define (transform expr)
@@ -839,7 +844,7 @@
       [else expr]))
   (transform expr))
 
-(define (precompile expr init-primitives)
+(define (precompile expr)
   (set! label-count 0)
 
   (precompile-transform-tailcalls
@@ -848,8 +853,7 @@
         (precompile-annotate-free-vars
           (precompile-transform-assignments
             (precompile-macro-expansion
-              (precompile-primitive-refs expr))))
-        init-primitives))))
+              (precompile-primitive-refs expr))))))))
 
 (define (emit-primitives labels constant-inits body env)
   (let* ([env-with-labels (extend-env-labels (map car labels) env)]
@@ -871,7 +875,7 @@
                labels))
 
   (define (precompile-primitives)
-    (map (lambda (p) (list (primitive-code-label (car p)) (precompile (cadr p) #f)))
+    (map (lambda (p) (list (primitive-code-label (car p)) (precompile (cadr p))))
          primitives))
 
   (let* ((merged-labels (merge-labels (precompile-primitives)))
@@ -888,7 +892,7 @@
     (close-output-port p)))
 
 (define (compile-program expr)
-  (let ([precompiled (precompile expr #t)])
+  (let ([precompiled (precompile expr)])
     (emit-program (cadr precompiled)
                   (caddr precompiled)
                   (cadddr precompiled)
