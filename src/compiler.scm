@@ -498,15 +498,12 @@
     (emit "mov %eax, ~s" name)))
 
 (define (emit-program labels constant-inits body env)
-  (let* ([env-with-labels (extend-env-labels (map car labels) env)]
-         [env-with-labels-and-primitives (extend-env-labels
-                                           (append (map (lambda (p) (primitive-label (car p))) primitives)
-                                                   (map (lambda (p) (primitive-code-label (car p))) primitives))
-                                           env-with-labels)])
+  (let* ([env-with-labels (extend-env-labels (append (map car labels) (primitive-labels primitives))
+                                             env)])
     (emit ".text")
     (emit ".p2align 4,,15")
 
-    (for-each (lambda (l) (emit-label-code l env-with-labels-and-primitives #f)) labels)
+    (for-each (lambda (l) (emit-label-code l env-with-labels #f)) labels)
 
     (emit-function-header "scheme_entry")
     ; Save registers
@@ -522,13 +519,13 @@
     ; First, turn primitives in `primitives` library into closures on heap
     ; This initializes all of them. Possible optimization: only init the ones
     ; that are used
-    (for-each (lambda (p) (emit-primitive-init (car p) (- wordsize) env-with-labels-and-primitives)) primitives)
+    (for-each (lambda (p) (emit-primitive-init (car p) (- wordsize) env-with-labels)) primitives)
 
     ; Then, initialize the constants
-    (for-each (lambda (c) (emit-constant-init c (- wordsize) env-with-labels-and-primitives)) constant-inits)
+    (for-each (lambda (c) (emit-constant-init c (- wordsize) env-with-labels)) constant-inits)
 
     ; Then the body
-    (emit-expr body (- wordsize) env-with-labels-and-primitives)
+    (emit-expr body (- wordsize) env-with-labels)
 
     ; Restore registers
     (emit "pop %edx")
@@ -827,12 +824,16 @@
   ;; TODO: replace - with underscore
   (string->symbol (format "P_~a_code" name)))
 
+(define (primitive-labels primitives)
+  (let ([names (map car primitives)])
+    (append (map primitive-label names)
+            (map primitive-code-label names))))
+
 (define primitives
   (list
     (list 'addandaddfour '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
     (list 'addthree '(lambda (x) (prim-apply + 3 x)))
-    (list 'addfour '(lambda (x) (prim-apply + 1 (addthree x))))
-    ))
+    (list 'addfour '(lambda (x) (prim-apply + 1 (addthree x))))))
 
 (define (precompile-primitive-refs expr)
   (define (transform expr)
@@ -855,14 +856,6 @@
             (precompile-macro-expansion
               (precompile-primitive-refs expr))))))))
 
-(define (emit-primitives labels constant-inits body env)
-  (let* ([env-with-labels (extend-env-labels (map car labels) env)]
-         [env-with-labels-and-primitives (extend-env-labels
-                                           (append (map (lambda (p) (primitive-label (car p))) primitives)
-                                                   (map (lambda (p) (primitive-code-label (car p))) primitives))
-                                           env-with-labels)])
-    (for-each (lambda (l) (emit-label-code l env-with-labels-and-primitives #t)) labels)))
-
 (define (compile-primitives primitives)
   (define (labels-to-label prefixed-labels)
     (let ([label-name (car prefixed-labels)]
@@ -877,6 +870,10 @@
   (define (precompile-primitives)
     (map (lambda (p) (list (primitive-code-label (car p)) (precompile (cadr p))))
          primitives))
+
+  (define (emit-primitives labels constant-inits body env)
+    (let* ([env-with-labels (extend-env-labels (append (map car labels) (primitive-labels primitives)) env)])
+      (for-each (lambda (l) (emit-label-code l env-with-labels #t)) labels)))
 
   (let* ((merged-labels (merge-labels (precompile-primitives)))
          (final-labels (map (lambda (p) (primitive-label (car p))) primitives)))
