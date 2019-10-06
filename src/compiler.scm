@@ -20,6 +20,15 @@
   (format (compile-port) ".local ~a\n" name)
   (format (compile-port) ".comm ~a,4,4\n" name))
 
+(define (emit-global name)
+  (format (compile-port) ".global ~a\n" name)
+  (format (compile-port) ".comm ~a,4,4\n" name))
+
+(define (emit-function-header name)
+    (format (compile-port) ".globl ~a\n" name)
+    (format (compile-port) ".type ~a, @function\n" name)
+    (emit-label name))
+
 (define fixnum-tag 0)
 (define fixnum-shift 2)
 (define fixnum-mask 3)
@@ -61,6 +70,7 @@
 (define-list-expr-check tailcall? 'tailcall)
 (define-list-expr-check constant-ref? 'constant-ref)
 (define-list-expr-check constant-init? 'constant-init)
+(define-list-expr-check primitive-ref? 'primitive-ref)
 (define-list-expr-check closure? 'closure)
 (define-list-expr-check lambda? 'lambda)
 (define-list-expr-check set? 'set!)
@@ -424,6 +434,12 @@
   ;; Now load what's at the label into %eax
   (emit "movl (%eax), %eax"))
 
+(define (emit-primitive-ref expr stack-index env)
+  ;; Load the label into %eax
+  (emit-identifier (primitive-label (cadr expr)) stack-index env)
+  ;; Now load what's at the label into %eax
+  (emit "movl (%eax), %eax"))
+
 (define (emit-expr expr stack-index env)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
         [(identifier? expr) (emit-identifier expr stack-index env)]
@@ -434,6 +450,7 @@
         [(tailcall? expr) (emit-funcall expr stack-index env #t)]
         [(closure? expr) (emit-closure expr stack-index env)]
         [(constant-ref? expr) (emit-constant-ref expr stack-index env)]
+        [(primitive-ref? expr) (emit-primitive-ref expr stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
@@ -444,7 +461,7 @@
 (define (free-vars-to-closure-offsets free-vars)
   (map (lambda (i) (* wordsize (+ 1 i))) (iota (length free-vars))))
 
-(define (emit-label-code label env)
+(define (emit-label-code label env globals)
   (case (caadr label)
     ([code]
      (let*
@@ -461,7 +478,7 @@
                                              env))]
         [locals-start (- (* wordsize (+ 1 (length args))))])
 
-       (emit-label name)
+       (if globals (emit-function-header name) (emit-label name))
        (emit-expr body locals-start inner-env)
        (emit "ret")))
     ([datum]
@@ -475,16 +492,17 @@
     (emit "mov %eax, ~s" name)))
 
 (define (emit-program labels constant-inits body env)
-  (let* ([env-with-labels (extend-env-labels (map car labels) env)])
+  (let* ([env-with-labels (extend-env-labels (map car labels) env)]
+         [env-with-labels-and-primitives (extend-env-labels
+                                           (append (map (lambda (p) (primitive-label (car p))) primitives)
+                                                   (map (lambda (p) (primitive-code-label (car p))) primitives))
+                                           env-with-labels)])
     (emit ".text")
     (emit ".p2align 4,,15")
 
-    (for-each (lambda (l) (emit-label-code l env-with-labels)) labels)
+    (for-each (lambda (l) (emit-label-code l env-with-labels-and-primitives #f)) labels)
 
-    (emit ".globl scheme_entry")
-    (emit ".type scheme_entry, @function")
-
-    (emit-label "scheme_entry")
+    (emit-function-header "scheme_entry")
     ; Save registers
     (emit "push %esi")
     (emit "push %edi")
@@ -496,10 +514,10 @@
     ; Compile!
 
     ; First, the initialize the constants
-    (for-each (lambda (c) (emit-constant-init c (- wordsize) env-with-labels)) constant-inits)
+    (for-each (lambda (c) (emit-constant-init c (- wordsize) env-with-labels-and-primitives)) constant-inits)
 
     ; Then the body
-    (emit-expr body (- wordsize) env-with-labels)
+    (emit-expr body (- wordsize) env-with-labels-and-primitives)
 
     ; Restore registers
     (emit "pop %edx")
@@ -512,6 +530,7 @@
   (define (walk-and-annotate expr free-vars)
     (cond
       ([immediate? expr] (list expr '()))
+      ([primitive-ref? expr] (list expr '()))
       ([identifier? expr] (list expr (if (member expr free-vars) '() (list expr))))
       ([not (list? expr)] (list expr '()))
 
@@ -599,6 +618,7 @@
 
       ([constant-ref? expr] expr)
       ([constant-init? expr] expr)
+      ([primitive-ref? expr] expr)
       (else `(funcall ,(transform (car expr))
                       ,@(map transform (cdr expr))))))
 
@@ -610,7 +630,7 @@
              ,constant-inits
              ,transformed-expr))))
 
-(define (precompile-add-constants expr)
+(define (precompile-add-constants expr init-primitives)
   (define label-forms '())
   (define constant-inits '())
 
@@ -661,6 +681,15 @@
 
       ([not (list? expr)] expr)
       ([null? expr] expr)
+
+      ;; TODO: All of the primitives init stuff should be extracted in its own precompile step
+      [(and init-primitives (primitive-ref? expr))
+       (let* ([primitive-name (cadr expr)]
+              [label (primitive-label primitive-name)]
+              [primitive-init `(closure ,(primitive-code-label primitive-name))])
+         (begin
+           (set! constant-inits (cons `(constant-init ,label ,primitive-init) constant-inits))
+           expr))]
 
       ([and (quote? expr) (immediate? (cdr expr))] (cdr expr))
       ([and (quote? expr) (assoc expr label-forms)] => cadr)
@@ -788,7 +817,29 @@
 
   (transform expr))
 
-(define (precompile expr)
+(define (primitive-label name)
+  ;; TODO: replace - with underscore
+  (string->symbol (format "P_~a" name)))
+
+(define (primitive-code-label name)
+  ;; TODO: replace - with underscore
+  (string->symbol (format "P_~a_code" name)))
+
+(define primitives
+  (list
+    (list 'addandaddfour '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))))
+
+(define (precompile-primitive-refs expr)
+  (define (transform expr)
+    (cond
+      ;; TODO: this needs to walk every form, not just a single list
+      [(list? expr) (map transform expr)]
+      ;; TODO: recomputing `primitive-label` here is brittle
+      [(and (symbol? expr) (assq expr primitives)) `(primitive-ref ,expr)]
+      [else expr]))
+  (transform expr))
+
+(define (precompile expr init-primitives)
   (set! label-count 0)
 
   (precompile-transform-tailcalls
@@ -796,8 +847,49 @@
       (precompile-add-constants
         (precompile-annotate-free-vars
           (precompile-transform-assignments
-            (precompile-macro-expansion expr)))))))
+            (precompile-macro-expansion
+              (precompile-primitive-refs expr))))
+        init-primitives))))
+
+(define (emit-primitives labels constant-inits body env)
+  (let* ([env-with-labels (extend-env-labels (map car labels) env)]
+         [env-with-labels-and-primitives (extend-env-labels
+                                           (append (map (lambda (p) (primitive-label (car p))) primitives)
+                                                   (map (lambda (p) (primitive-code-label (car p))) primitives))
+                                           env-with-labels)])
+    (for-each (lambda (l) (emit-label-code l env-with-labels-and-primitives #t)) labels)))
+
+(define (compile-primitives primitives)
+  (define (labels-to-label prefixed-labels)
+    (let ([label-name (car prefixed-labels)]
+          [code (cadr (car (cadr (cadr prefixed-labels))))])
+      `((,label-name ,code))))
+
+  (define (merge-labels labels)
+    (fold-left (lambda (final pre) (append final (labels-to-label pre)))
+               '()
+               labels))
+
+  (define (precompile-primitives)
+    (map (lambda (p) (list (primitive-code-label (car p)) (precompile (cadr p) #f)))
+         primitives))
+
+  (let* ((merged-labels (merge-labels (precompile-primitives)))
+         (final-labels (map (lambda (p) (primitive-label (car p))) primitives)))
+    (emit ".text")
+    (emit ".p2align 4,,15")
+    (emit-primitives merged-labels '() '() '())
+    (for-each emit-global final-labels)))
+
+(define (compile-primitives-to-file filename)
+  (let ([p (open-output-file filename 'replace)])
+    (parameterize ([compile-port p])
+      (compile-primitives primitives))
+    (close-output-port p)))
 
 (define (compile-program expr)
-  (let ([precompiled (precompile expr)])
-    (emit-program (cadr precompiled) (caddr precompiled) (cadddr precompiled) (new-env))))
+  (let ([precompiled (precompile expr #t)])
+    (emit-program (cadr precompiled)
+                  (caddr precompiled)
+                  (cadddr precompiled)
+                  (new-env))))

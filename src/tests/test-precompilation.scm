@@ -120,3 +120,10 @@
          (funcall (closure label_3 g) 5)
          (prim-apply eq? (funcall f) (funcall f))))])
 
+
+(add-tests-with-precompiled-output "primitive refs"
+  [(addandaddfour 1 2)
+  => (labels
+      ()
+      ((constant-init P_addandaddfour (closure P_addandaddfour_code)))
+      (funcall (primitive-ref addandaddfour) 1 2))])
