@@ -871,15 +871,12 @@
     (map (lambda (p) (list (primitive-code-label (car p)) (precompile (cadr p))))
          primitives))
 
-  (define (emit-primitives labels constant-inits body env)
-    (let* ([env-with-labels (extend-env-labels (append (map car labels) (primitive-labels primitives)) env)])
-      (for-each (lambda (l) (emit-label-code l env-with-labels #t)) labels)))
-
   (let* ((merged-labels (merge-labels (precompile-primitives)))
-         (final-labels (map (lambda (p) (primitive-label (car p))) primitives)))
+         (final-labels (map primitive-label (map car primitives))))
     (emit ".text")
     (emit ".p2align 4,,15")
-    (emit-primitives merged-labels '() '() '())
+    (let* ([env (extend-env-labels (primitive-labels primitives) '())])
+      (for-each (lambda (l) (emit-label-code l env #t)) merged-labels))
     (for-each emit-global final-labels)))
 
 (define (compile-primitives-to-file filename)
