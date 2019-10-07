@@ -432,15 +432,9 @@
           [label (emit "movl $~a, %eax" (caddr p))]
           [free-var (emit "movl ~a(%edx), %eax" (caddr p))]))))
 
-(define (emit-constant-ref expr stack-index env)
+(define (emit-load-label label stack-index env)
   ;; Load the label into %eax
-  (emit-identifier (cadr expr) stack-index env)
-  ;; Now load what's at the label into %eax
-  (emit "movl (%eax), %eax"))
-
-(define (emit-primitive-ref expr stack-index env)
-  ;; Load the label into %eax
-  (emit-identifier (primitive-label (cadr expr)) stack-index env)
+  (emit-identifier label stack-index env)
   ;; Now load what's at the label into %eax
   (emit "movl (%eax), %eax"))
 
@@ -453,8 +447,10 @@
         [(funcall? expr) (emit-funcall expr stack-index env #f)]
         [(tailcall? expr) (emit-funcall expr stack-index env #t)]
         [(closure? expr) (emit-closure expr stack-index env)]
-        [(constant-ref? expr) (emit-constant-ref expr stack-index env)]
-        [(primitive-ref? expr) (emit-primitive-ref expr stack-index env)]
+        [(constant-ref? expr)
+         (emit-load-label (cadr expr) stack-index env)]
+        [(primitive-ref? expr)
+         (emit-load-label (primitive-label (cadr expr)) stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
