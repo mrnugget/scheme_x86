@@ -21,10 +21,11 @@
   (format (compile-port) ".comm ~a,4,4\n" name))
 
 (define (emit-global name)
-  (format (compile-port) ".global ~a\n" name)
+  (format (compile-port) ".globl ~a\n" name)
   (format (compile-port) ".comm ~a,4,4\n" name))
 
 (define (emit-function-header name)
+    (format (compile-port) ".text\n")
     (format (compile-port) ".globl ~a\n" name)
     (format (compile-port) ".type ~a, @function\n" name)
     (emit-label name))
@@ -488,8 +489,18 @@
 (define (emit-primitive-init name stack-index env)
   (let ([label (primitive-label name)]
         [init-label (primitive-init-label name)])
-    (emit-expr `(closure ,init-label) stack-index env)
-    (emit "mov %eax, ~s" label)))
+
+    (emit "movl $~a, %eax" init-label)
+    (emit "movl %edx, ~a(%esp)" stack-index)
+
+          ; advance %esp and call the function
+          (emit "subl $~a, %esp" (- stack-index))
+          (emit "call *%eax")
+
+          ; restore the stack pointer afterwards and reload our current closure
+          (emit "addl $~a, %esp" (- stack-index))
+          (emit "movl ~a(%esp), %edx" stack-index)
+    ))
 
 (define (emit-constant-init expr stack-index env)
   (let ([name (cadr expr)]
@@ -842,9 +853,9 @@
     (list 'add-and-add-four '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
     (list 'add-three '(lambda (x) (prim-apply + 3 x)))
     (list 'add-four '(lambda (x) (prim-apply + 1 (add-three x))))
-    ; (list 'calls-another-lambda '(lambda (x)
-    ;                                (let ((g (lambda (x) (prim-apply + 1 x))))
-    ;                                  (g x))))
+    (list 'calls-another-lambda '(lambda (x)
+                                   (let ((g (lambda (x) (prim-apply + 1 x))))
+                                     (g x))))
     ))
 
 (define (precompile-primitive-refs expr)
@@ -867,20 +878,6 @@
               (precompile-primitive-refs expr))))))))
 
 (define (compile-primitives primitives)
-  (define (labels-to-label prefixed-labels)
-    (let ([label-name (car prefixed-labels)]
-          [code (cadr (car (cadr (cadr prefixed-labels))))])
-      `((,label-name ,code))))
-
-  (define (merge-labels labels)
-    (fold-left (lambda (final pre) (append final (labels-to-label pre)))
-               '()
-               labels))
-
-  (define (precompile-primitives)
-    (map (lambda (p) (list (primitive-init-label (car p)) (precompile (cadr p))))
-         primitives))
-
   ;; TODO:
   ;; for each primitive:
   ;; - precompile code
@@ -890,13 +887,34 @@
   ;; - move %eax into global label
   ;; then, when compiling program:
   ;; - for each defined primitive, call (P_<primitive>_init)
-  (let* ((merged-labels (merge-labels (precompile-primitives)))
-         (final-labels (map primitive-label (map car primitives))))
+  (define (compile-primitive p)
+    (let* ([name (car p)]
+           [code (cadr p)]
+
+           [pre (precompile code)]
+
+           [labels (cadr pre)]
+           [const-inits (caddr pre)]
+           [body (cadddr pre)]
+
+           [env (extend-env-labels (append (map car labels)
+                                           (primitive-labels primitives))
+                                   '())])
+      (emit-global (primitive-label name))
+
+      (for-each (lambda (l) (emit-label-code l env #f)) labels)
+
+      (emit-function-header (primitive-init-label name))
+
+      (for-each (lambda (c) (emit-constant-init c (- wordsize) env)) const-inits)
+
+      (emit-expr body (- wordsize) env)
+      (emit "mov %eax, ~s" (primitive-label name))
+      (emit "ret")))
+
     (emit ".text")
     (emit ".p2align 4,,15")
-    (let* ([env (extend-env-labels (primitive-labels primitives) '())])
-      (for-each (lambda (l) (emit-label-code l env #t)) merged-labels))
-    (for-each emit-global final-labels)))
+    (for-each compile-primitive primitives))
 
 (define (compile-primitives-to-file filename)
   (set! label-count 0)
