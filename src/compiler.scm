@@ -85,6 +85,9 @@
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
 
+(define (primitive-name? expr)
+  (and (symbol? expr) (assq expr primitives)))
+
 (define (lambda-body x) (cddr x))
 (define (lambda-vars expr) (cadr expr))
 
@@ -801,6 +804,10 @@
 (define (precompile-macro-expansion expr)
   (define (transform expr)
     (cond
+      [(primitive-name? expr)
+       `(primitive-ref ,expr)]
+      [(funcall? expr)
+       `(funcall ,@(map transform (cdr expr)))]
       [(if? expr)
        `(if ,(transform (if-condition expr))
             ,(transform (if-consequence expr))
@@ -819,10 +826,12 @@
          (transform (if (null? rest-bindings)
              `(let ,transformed-first-binding ,@(map transform (let-body expr)))
              `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))))]
+
       [(and? expr)
        (cond [(null? (cdr expr)) #t]
              [(null? (cddr expr)) (transform (cadr expr))]
              [else (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f))])]
+      [(list? expr) (map transform expr)]
       [else expr]))
 
   (transform expr))
@@ -856,24 +865,13 @@
                                    (let ((g (lambda (x) (prim-apply + 1 x))))
                                      (g x))))))
 
-(define (precompile-primitive-refs expr)
-  (define (transform expr)
-    (cond
-      ;; TODO: this needs to walk every form, not just a single list
-      [(list? expr) (map transform expr)]
-      ;; TODO: recomputing `primitive-label` here is brittle
-      [(and (symbol? expr) (assq expr primitives)) `(primitive-ref ,expr)]
-      [else expr]))
-  (transform expr))
-
 (define (precompile expr)
   (precompile-transform-tailcalls
     (precompile-add-code-labels
       (precompile-add-constants
         (precompile-annotate-free-vars
           (precompile-transform-assignments
-            (precompile-macro-expansion
-              (precompile-primitive-refs expr))))))))
+            (precompile-macro-expansion expr)))))))
 
 (define (compile-primitives primitives)
   (define (compile-primitive p)
