@@ -840,7 +840,6 @@
     (string->symbol (list->string lst))))
 
 (define (primitive-init-label name)
-  ;; TODO: replace - with underscore
   (string->symbol (format "~a_init" (primitive-label name))))
 
 (define (primitive-labels primitives)
@@ -855,8 +854,7 @@
     (list 'add-four '(lambda (x) (prim-apply + 1 (add-three x))))
     (list 'calls-another-lambda '(lambda (x)
                                    (let ((g (lambda (x) (prim-apply + 1 x))))
-                                     (g x))))
-    ))
+                                     (g x))))))
 
 (define (precompile-primitive-refs expr)
   (define (transform expr)
@@ -878,19 +876,11 @@
               (precompile-primitive-refs expr))))))))
 
 (define (compile-primitives primitives)
-  ;; TODO:
-  ;; for each primitive:
-  ;; - precompile code
-  ;; - emit code labels (locals, lambdas, etc.)
-  ;; - emit global function header (P_<primitive>_init)
-  ;; - emit "body" that leaves closure (or other value) in %eax
-  ;; - move %eax into global label
-  ;; then, when compiling program:
-  ;; - for each defined primitive, call (P_<primitive>_init)
   (define (compile-primitive p)
     (let* ([name (car p)]
            [code (cadr p)]
 
+           ;; Step 1) precompile code
            [pre (precompile code)]
 
            [labels (cadr pre)]
@@ -900,20 +890,29 @@
            [env (extend-env-labels (append (map car labels)
                                            (primitive-labels primitives))
                                    '())])
+
+      ;; Step 2) Emit global label into which initialized primitive (e.g. a
+      ;; closure) will be stored
       (emit-global (primitive-label name))
 
+      ;; Step 3) Emit the code labels belonging to single primitive (e.g.
+      ;; lambdas used by primitive)
       (for-each (lambda (l) (emit-label-code l env #f)) labels)
 
+      ;; Step 4) Emit the global function header that gets called by program
+      ;; to initialize the primitives
       (emit-function-header (primitive-init-label name))
 
+      ;; Step 5) Initialize the constants needed to initialize the primitive
       (for-each (lambda (c) (emit-constant-init c (- wordsize) env)) const-inits)
 
+      ;; Step 6) Emit the `body` that will then leave the primitive in %eax
       (emit-expr body (- wordsize) env)
+
+      ;; Step 7) Move %eax into the global label and return
       (emit "mov %eax, ~s" (primitive-label name))
       (emit "ret")))
 
-    (emit ".text")
-    (emit ".p2align 4,,15")
     (for-each compile-primitive primitives))
 
 (define (compile-primitives-to-file filename)
