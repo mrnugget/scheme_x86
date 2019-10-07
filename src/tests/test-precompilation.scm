@@ -122,5 +122,5 @@
 
 
 (add-tests-with-precompiled-output "primitive refs"
-  [(addandaddfour 1 2)
-  => (labels () () (funcall (primitive-ref addandaddfour) 1 2))])
+  [(add-and-add-four 1 2)
+  => (labels () () (funcall (primitive-ref add-and-add-four) 1 2))])
