@@ -461,7 +461,7 @@
 (define (free-vars-to-closure-offsets free-vars)
   (map (lambda (i) (* wordsize (+ 1 i))) (iota (length free-vars))))
 
-(define (emit-label-code label env globals)
+(define (emit-label-code label env)
   (case (caadr label)
     ([code]
      (let*
@@ -478,7 +478,7 @@
                                              env))]
         [locals-start (- (* wordsize (+ 1 (length args))))])
 
-       (if globals (emit-function-header name) (emit-label name))
+       (emit-label name)
        (emit-expr body locals-start inner-env)
        (emit "ret")))
     ([datum]
@@ -489,17 +489,16 @@
   (let ([label (primitive-label name)]
         [init-label (primitive-init-label name)])
 
-    (emit "movl $~a, %eax" init-label)
+    ; Save current closure
     (emit "movl %edx, ~a(%esp)" stack-index)
 
-          ; advance %esp and call the function
-          (emit "subl $~a, %esp" (- stack-index))
-          (emit "call *%eax")
+    ; Advance %esp and call the init function located at the label
+    (emit "subl $~a, %esp" (- stack-index))
+    (emit "call ~a" init-label)
 
-          ; restore the stack pointer afterwards and reload our current closure
-          (emit "addl $~a, %esp" (- stack-index))
-          (emit "movl ~a(%esp), %edx" stack-index)
-    ))
+    ; Restore the stack pointer afterwards and reload our current closure
+    (emit "addl $~a, %esp" (- stack-index))
+    (emit "movl ~a(%esp), %edx" stack-index)))
 
 (define (emit-constant-init expr stack-index env)
   (let ([name (cadr expr)]
@@ -513,7 +512,7 @@
     (emit ".text")
     (emit ".p2align 4,,15")
 
-    (for-each (lambda (l) (emit-label-code l env-with-labels #f)) labels)
+    (for-each (lambda (l) (emit-label-code l env-with-labels)) labels)
 
     (emit-function-header "scheme_entry")
     ; Save registers
@@ -891,7 +890,7 @@
 
       ;; Step 3) Emit the code labels belonging to single primitive (e.g.
       ;; lambdas used by primitive)
-      (for-each (lambda (l) (emit-label-code l env #f)) labels)
+      (for-each (lambda (l) (emit-label-code l env)) labels)
 
       ;; Step 4) Emit the global function header that gets called by program
       ;; to initialize the primitives
