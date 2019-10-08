@@ -861,7 +861,10 @@
     (list 'add-four '(lambda (x) (prim-apply + 1 (add-three x))))
     (list 'calls-another-lambda '(lambda (x)
                                    (let ((g (lambda (x) (prim-apply + 1 x))))
-                                     (g x))))))
+                                     (g x))))
+    (list 'length '(lambda (lst) (if (prim-apply null? lst)
+                             0
+                             (prim-apply add1 (length (prim-apply cdr lst))))))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
