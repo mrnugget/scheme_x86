@@ -1,3 +1,9 @@
+(add-tests-with-string-output "let*"
+  [(let* ([x 1] [y 2]) (prim-apply + x y)) => "3\n"]
+  [(let* ([result (let* ([x 1] [y 2]) (prim-apply + x y))]
+          [z 3])
+     (prim-apply + result z)) => "6\n"])
+
 (add-tests-with-precompiled-output "let* to let"
   [(let* ([x 1]) (prim-apply + x y))
    => (labels
@@ -31,6 +37,10 @@
                  (prim-apply + z (let ([x 1]) (let ([y 2]) (prim-apply + x y)))))))
         ()
         (closure label_0))])
+
+(add-tests-with-string-output "and"
+  [(and (prim-apply zero? 0) (prim-apply eq? 3 4)) => "#f\n"]
+  [(and (prim-apply zero? 0) (prim-apply eq? 9 9)) => "#t\n"])
 
 (add-tests-with-precompiled-output "boolean 'and' to if expressions"
   [(and (prim-apply zero? 0))
