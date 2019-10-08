@@ -831,17 +831,20 @@
 
   (transform expr))
 
+(define (sanitize-label name)
+  (define (replace-char c)
+    (case c
+      [(#\-) #\_]
+      [(#\!) #\b]
+      [(#\=) #\e]
+      [(#\>) #\g]
+      [(#\?) #\p]
+      [else c]))
+
+  (list->string (map replace-char (string->list name))))
+
 (define (primitive-label name)
-  (let ([lst (map (lambda (c)
-                    (case c
-                      [(#\-) #\_]
-                      [(#\!) #\b]
-                      [(#\=) #\e]
-                      [(#\>) #\g]
-                      [(#\?) #\p]
-                      [else c]))
-                  (string->list (symbol->string name)))])
-    (string->symbol (list->string lst))))
+  (string->symbol (sanitize-label (format "P_~a" name))))
 
 (define (primitive-init-label name)
   (string->symbol (format "~a_init" (primitive-label name))))
