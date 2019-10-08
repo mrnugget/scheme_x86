@@ -20,6 +20,16 @@
   (format (compile-port) ".local ~a\n" name)
   (format (compile-port) ".comm ~a,4,4\n" name))
 
+(define (emit-global name)
+  (format (compile-port) ".globl ~a\n" name)
+  (format (compile-port) ".comm ~a,4,4\n" name))
+
+(define (emit-function-header name)
+    (format (compile-port) ".text\n")
+    (format (compile-port) ".globl ~a\n" name)
+    (format (compile-port) ".type ~a, @function\n" name)
+    (emit-label name))
+
 (define fixnum-tag 0)
 (define fixnum-shift 2)
 (define fixnum-mask 3)
@@ -61,6 +71,7 @@
 (define-list-expr-check tailcall? 'tailcall)
 (define-list-expr-check constant-ref? 'constant-ref)
 (define-list-expr-check constant-init? 'constant-init)
+(define-list-expr-check primitive-ref? 'primitive-ref)
 (define-list-expr-check closure? 'closure)
 (define-list-expr-check lambda? 'lambda)
 (define-list-expr-check set? 'set!)
@@ -73,6 +84,9 @@
 
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
+
+(define (primitive-name? expr)
+  (and (symbol? expr) (assq expr primitives)))
 
 (define (lambda-body x) (cddr x))
 (define (lambda-vars expr) (cadr expr))
@@ -418,9 +432,9 @@
           [label (emit "movl $~a, %eax" (caddr p))]
           [free-var (emit "movl ~a(%edx), %eax" (caddr p))]))))
 
-(define (emit-constant-ref expr stack-index env)
+(define (emit-load-label label stack-index env)
   ;; Load the label into %eax
-  (emit-identifier (cadr expr) stack-index env)
+  (emit-identifier label stack-index env)
   ;; Now load what's at the label into %eax
   (emit "movl (%eax), %eax"))
 
@@ -433,7 +447,10 @@
         [(funcall? expr) (emit-funcall expr stack-index env #f)]
         [(tailcall? expr) (emit-funcall expr stack-index env #t)]
         [(closure? expr) (emit-closure expr stack-index env)]
-        [(constant-ref? expr) (emit-constant-ref expr stack-index env)]
+        [(constant-ref? expr)
+         (emit-load-label (cadr expr) stack-index env)]
+        [(primitive-ref? expr)
+         (emit-load-label (primitive-label (cadr expr)) stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
@@ -468,6 +485,21 @@
      (let ([name (car label)])
        (emit-local name)))))
 
+(define (emit-primitive-init name stack-index env)
+  (let ([label (primitive-label name)]
+        [init-label (primitive-init-label name)])
+
+    ; Save current closure
+    (emit "movl %edx, ~a(%esp)" stack-index)
+
+    ; Advance %esp and call the init function located at the label
+    (emit "subl $~a, %esp" (- stack-index))
+    (emit "call ~a" init-label)
+
+    ; Restore the stack pointer afterwards and reload our current closure
+    (emit "addl $~a, %esp" (- stack-index))
+    (emit "movl ~a(%esp), %edx" stack-index)))
+
 (define (emit-constant-init expr stack-index env)
   (let ([name (cadr expr)]
         [value-expr (caddr expr)])
@@ -475,16 +507,14 @@
     (emit "mov %eax, ~s" name)))
 
 (define (emit-program labels constant-inits body env)
-  (let* ([env-with-labels (extend-env-labels (map car labels) env)])
+  (let* ([env-with-labels (extend-env-labels (append (map car labels) (primitive-labels primitives))
+                                             env)])
     (emit ".text")
     (emit ".p2align 4,,15")
 
     (for-each (lambda (l) (emit-label-code l env-with-labels)) labels)
 
-    (emit ".globl scheme_entry")
-    (emit ".type scheme_entry, @function")
-
-    (emit-label "scheme_entry")
+    (emit-function-header "scheme_entry")
     ; Save registers
     (emit "push %esi")
     (emit "push %edi")
@@ -495,7 +525,12 @@
 
     ; Compile!
 
-    ; First, the initialize the constants
+    ; First, turn primitives in `primitives` library into closures on heap
+    ; This initializes all of them. Possible optimization: only init the ones
+    ; that are used
+    (for-each (lambda (p) (emit-primitive-init (car p) (- wordsize) env-with-labels)) primitives)
+
+    ; Then, initialize the constants
     (for-each (lambda (c) (emit-constant-init c (- wordsize) env-with-labels)) constant-inits)
 
     ; Then the body
@@ -512,6 +547,7 @@
   (define (walk-and-annotate expr free-vars)
     (cond
       ([immediate? expr] (list expr '()))
+      ([primitive-ref? expr] (list expr '()))
       ([identifier? expr] (list expr (if (member expr free-vars) '() (list expr))))
       ([not (list? expr)] (list expr '()))
 
@@ -599,6 +635,7 @@
 
       ([constant-ref? expr] expr)
       ([constant-init? expr] expr)
+      ([primitive-ref? expr] expr)
       (else `(funcall ,(transform (car expr))
                       ,@(map transform (cdr expr))))))
 
@@ -762,6 +799,10 @@
 (define (precompile-macro-expansion expr)
   (define (transform expr)
     (cond
+      [(primitive-name? expr)
+       `(primitive-ref ,expr)]
+      [(funcall? expr)
+       `(funcall ,@(map transform (cdr expr)))]
       [(if? expr)
        `(if ,(transform (if-condition expr))
             ,(transform (if-consequence expr))
@@ -780,17 +821,52 @@
          (transform (if (null? rest-bindings)
              `(let ,transformed-first-binding ,@(map transform (let-body expr)))
              `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))))]
+
       [(and? expr)
        (cond [(null? (cdr expr)) #t]
              [(null? (cddr expr)) (transform (cadr expr))]
              [else (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f))])]
+      [(list? expr) (map transform expr)]
       [else expr]))
 
   (transform expr))
 
-(define (precompile expr)
-  (set! label-count 0)
+(define (sanitize-label name)
+  (define (replace-char c)
+    (case c
+      [(#\-) #\_]
+      [(#\!) #\b]
+      [(#\=) #\e]
+      [(#\>) #\g]
+      [(#\?) #\p]
+      [else c]))
 
+  (list->string (map replace-char (string->list name))))
+
+(define (primitive-label name)
+  (string->symbol (sanitize-label (format "P_~a" name))))
+
+(define (primitive-init-label name)
+  (string->symbol (format "~a_init" (primitive-label name))))
+
+(define (primitive-labels primitives)
+  (let ([names (map car primitives)])
+    (append (map primitive-label names)
+            (map primitive-init-label names))))
+
+(define primitives
+  (list
+    (list 'add-and-add-four '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
+    (list 'add-three '(lambda (x) (prim-apply + 3 x)))
+    (list 'add-four '(lambda (x) (prim-apply + 1 (add-three x))))
+    (list 'calls-another-lambda '(lambda (x)
+                                   (let ((g (lambda (x) (prim-apply + 1 x))))
+                                     (g x))))
+    (list 'length '(lambda (lst) (if (prim-apply null? lst)
+                             0
+                             (prim-apply add1 (length (prim-apply cdr lst))))))))
+
+(define (precompile expr)
   (precompile-transform-tailcalls
     (precompile-add-code-labels
       (precompile-add-constants
@@ -798,6 +874,58 @@
           (precompile-transform-assignments
             (precompile-macro-expansion expr)))))))
 
+(define (compile-primitives primitives)
+  (define (compile-primitive p)
+    (let* ([name (car p)]
+           [code (cadr p)]
+
+           ;; Step 1) precompile code
+           [pre (precompile code)]
+
+           [labels (cadr pre)]
+           [const-inits (caddr pre)]
+           [body (cadddr pre)]
+
+           [env (extend-env-labels (append (map car labels)
+                                           (primitive-labels primitives))
+                                   '())])
+
+      ;; Step 2) Emit global label into which initialized primitive (e.g. a
+      ;; closure) will be stored
+      (emit-global (primitive-label name))
+
+      ;; Step 3) Emit the code labels belonging to single primitive (e.g.
+      ;; lambdas used by primitive)
+      (for-each (lambda (l) (emit-label-code l env)) labels)
+
+      ;; Step 4) Emit the global function header that gets called by program
+      ;; to initialize the primitives
+      (emit-function-header (primitive-init-label name))
+
+      ;; Step 5) Initialize the constants needed to initialize the primitive
+      (for-each (lambda (c) (emit-constant-init c (- wordsize) env)) const-inits)
+
+      ;; Step 6) Emit the `body` that will then leave the primitive in %eax
+      (emit-expr body (- wordsize) env)
+
+      ;; Step 7) Move %eax into the global label and return
+      (emit "mov %eax, ~s" (primitive-label name))
+      (emit "ret")))
+
+    (set! label-count 0)
+    (for-each compile-primitive primitives))
+
+(define (compile-primitives-to-file filename)
+  (let ([p (open-output-file filename 'replace)])
+    (parameterize ([compile-port p])
+      (compile-primitives primitives))
+    (close-output-port p)))
+
 (define (compile-program expr)
+  (set! label-count 0)
+
   (let ([precompiled (precompile expr)])
-    (emit-program (cadr precompiled) (caddr precompiled) (cadddr precompiled) (new-env))))
+    (emit-program (cadr precompiled)
+                  (caddr precompiled)
+                  (cadddr precompiled)
+                  (new-env))))

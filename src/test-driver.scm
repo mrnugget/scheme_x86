@@ -74,6 +74,7 @@
         [out  (caddr test)])
     (printf "Test ~s:~s ..." test-id expr)
     (flush-output-port)
+    (set! label-count 0)
     (case type
      [(string) (test-with-string-output test-id expr out)]
      [(precompiled) (test-with-precompiled-output test-id expr out)]

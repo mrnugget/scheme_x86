@@ -14,20 +14,23 @@
 # `-fno-asynchronous-unwind-tables` gets rid of all the '.cfi' directives from
 # the generated asm.
 
+lib.s: compiler.scm
+	echo '(compile-primitives-to-file "lib.s")' | scheme --quiet compiler.scm
+
 .PHONY: emitted
-emitted: runtime.c emitted.s
+emitted: runtime.c emitted.s lib.s
 	gcc	-m32 \
 		-Wall \
 		-g3 -ggdb3 \
 		-fomit-frame-pointer \
 		-fno-asynchronous-unwind-tables \
-		-O0 runtime.c emitted.s \
+		-O0 runtime.c lib.s emitted.s \
 		-o emitted
 
 .PHONY: test
-test:
+test: lib.s
 	echo '(test-all)' | scheme --quiet --script test-driver.scm -- --test ${TEST}
 
 .PHONY: clean
 clean:
-	rm -f emitted.s emitted emitted.out
+	rm -f lib.s emitted.s emitted emitted.out
