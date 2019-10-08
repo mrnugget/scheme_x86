@@ -32,7 +32,7 @@
         ()
         (closure label_0))])
 
-(add-tests-with-precompiled-output "boolean and to if expressions"
+(add-tests-with-precompiled-output "boolean 'and' to if expressions"
   [(and (prim-apply zero? 0))
    => (labels
         ()
