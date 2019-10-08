@@ -909,11 +909,10 @@
       (emit "mov %eax, ~s" (primitive-label name))
       (emit "ret")))
 
+    (set! label-count 0)
     (for-each compile-primitive primitives))
 
 (define (compile-primitives-to-file filename)
-  (set! label-count 0)
-
   (let ([p (open-output-file filename 'replace)])
     (parameterize ([compile-port p])
       (compile-primitives primitives))
