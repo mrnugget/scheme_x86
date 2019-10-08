@@ -78,6 +78,7 @@
 (define-list-expr-check prim-apply? 'prim-apply)
 (define-list-expr-check let? 'let)
 (define-list-expr-check let*? 'let*)
+(define-list-expr-check letrec? 'letrec)
 (define-list-expr-check quote? 'quote)
 (define-list-expr-check if? 'if)
 (define-list-expr-check and? 'and)
@@ -822,6 +823,11 @@
              `(let ,transformed-first-binding ,@(map transform (let-body expr)))
              `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))))]
 
+      [(letrec? expr)
+       (let* ([bindings (let-bindings expr)]
+              [new-bindings (map (lambda (b) `(,(car b) #f)) bindings)]
+              [inits (map (lambda (b) `(set! ,(car b) ,(cadr b))) bindings)])
+         (transform `(let ,new-bindings ,@inits ,@(map transform (let-body expr)))))]
       [(and? expr)
        (cond [(null? (cdr expr)) #t]
              [(null? (cddr expr)) (transform (cadr expr))]

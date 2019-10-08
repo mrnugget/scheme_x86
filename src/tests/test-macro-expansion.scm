@@ -66,3 +66,25 @@
                 (prim-apply eq? 9 8)
                 #f)
             #f))])
+
+(add-tests-with-string-output "letrec"
+  [(letrec () 12) => "12\n"]
+  [(letrec ([f 12]) f) => "12\n"]
+  [(letrec ([f 12] [g 13]) (prim-apply + f g)) => "25\n"]
+  [(letrec ([f 12] [g (lambda () f)])
+     (g)) => "12\n"]
+  [(letrec ([f 12] [g (lambda (n) (set! f n))])
+    (g 130)
+    f) => "130\n"]
+  [(letrec ([f (lambda (g) (let ([x 99]) (set! f g) (f)))])
+     (f (lambda () 12))) => "12\n"]
+
+  [(letrec ([f (lambda (f n)
+                  (if (prim-apply zero? n)
+                      0
+                      (prim-apply + n (f f (prim-apply sub1 n)))))])
+      (f f 5)) => "15\n"]
+  [(letrec ([user-length (lambda (lst) (if (prim-apply null? lst)
+                                           0
+                                           (prim-apply add1 (user-length (prim-apply cdr lst)))))])
+     (user-length '(1 2 3))) => "3\n"])

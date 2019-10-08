@@ -1,3 +1,8 @@
 (load "src/compiler.scm")
-(define in '(let ([f (lambda (c) (cons (lambda (v) (set! c v)) (lambda () c)))]) (let ([p (f 0)]) ((car p) 12) ((cdr p)))))
-(assignment-conversion in)
+
+(define in '(letrec ([f 12] [g 13]) (prim-apply + f g)))
+
+(pretty-print (let* ([bindings (let-bindings in)]
+       [new-bindings (map (lambda (b) `(,(car b) #f)) bindings)]
+       [inits (map (lambda (b) `(set! ,(car b) ,(cadr b))) bindings)])
+  `(let ,new-bindings ,@inits ,@(let-body in))))
