@@ -82,6 +82,7 @@
 (define-list-expr-check quote? 'quote)
 (define-list-expr-check if? 'if)
 (define-list-expr-check and? 'and)
+(define-list-expr-check foreign-call? 'foreign-call)
 
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
@@ -439,6 +440,41 @@
   ;; Now load what's at the label into %eax
   (emit "movl (%eax), %eax"))
 
+(define (emit-foreign-call expr stack-index env)
+  (let* ([call-target (format "scm_~a" (cadr expr))]
+
+         ; For foreign calls, the args have to be above return address on stack,
+         ; so we don't reserve _two_ slots above them, as we do for internal calls.
+         ; Instead, we we reserve one slot for the current closure.
+         [args-start (- stack-index wordsize)]
+
+         ;; For foreign calls, we `(reverse)` the args because in the C
+         ;; calling convention, they're in a different order
+         [args (reverse (cddr expr))]
+         [args (map list args
+                    (map (lambda (i) (- args-start (* wordsize i)))
+                         (iota (length args))))]
+
+         [eval-stack-index (- args-start (* wordsize (length args)))])
+
+    (for-each
+      (lambda (arg) (begin (emit-expr (car arg) eval-stack-index env)
+                           (emit "movl %eax, ~a(%esp)" (cadr arg))))
+      args)
+
+
+    (emit "movl %edx, ~a(%esp)" (- stack-index))
+
+    ;; Since the return address needs a slot _below_ the args, we subtract
+    ;; `eval-stack-index` (which is how much space the args take up on the stack)
+    ;; and an additional `wordsize`, which is where the `call` will put the
+    ;; return address
+    (emit "subl $~a, %esp" (- (+ eval-stack-index wordsize)))
+    (emit "call ~a" call-target)
+    (emit "addl $~a, %esp" (- (+ eval-stack-index wordsize)))
+
+    (emit "movl ~a(%esp), %edx" (- stack-index))))
+
 (define (emit-expr expr stack-index env)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
         [(identifier? expr) (emit-identifier expr stack-index env)]
@@ -452,6 +488,8 @@
          (emit-load-label (cadr expr) stack-index env)]
         [(primitive-ref? expr)
          (emit-load-label (primitive-label (cadr expr)) stack-index env)]
+        [(foreign-call? expr)
+         (emit-foreign-call expr stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
@@ -552,6 +590,12 @@
       ([identifier? expr] (list expr (if (member expr free-vars) '() (list expr))))
       ([not (list? expr)] (list expr '()))
 
+      ([foreign-call? expr]
+       (let* ([results (walk-and-annotate (cddr expr) free-vars)]
+              [annotated (car results)]
+              [free-vars (cadr results)])
+         (list `(foreign-call ,(cadr expr) ,@annotated) (remove-duplicates free-vars))))
+
       ([if? expr]
        (let* ([results (walk-and-annotate (cdr expr) free-vars)]
               [annotated (car results)]
@@ -637,6 +681,7 @@
       ([constant-ref? expr] expr)
       ([constant-init? expr] expr)
       ([primitive-ref? expr] expr)
+      ([foreign-call? expr] expr)
       (else `(funcall ,(transform (car expr))
                       ,@(map transform (cdr expr))))))
 
@@ -699,6 +744,10 @@
 
       ([not (list? expr)] expr)
       ([null? expr] expr)
+
+      ([foreign-call? expr] `(foreign-call ,(cadr expr) ,@(map transform (cddr expr))))
+
+      ([and (quote? expr) (immediate? (cdr expr))] (cdr expr))
 
       ([and (quote? expr) (immediate? (cdr expr))] (cdr expr))
       ([and (quote? expr) (assoc expr label-forms)] => cadr)
@@ -802,6 +851,8 @@
     (cond
       [(primitive-name? expr)
        `(primitive-ref ,expr)]
+      [(foreign-call? expr)
+       `(foreign-call ,(cadr expr) ,@(map transform (cddr expr)))]
       [(funcall? expr)
        `(funcall ,@(map transform (cdr expr)))]
       [(if? expr)

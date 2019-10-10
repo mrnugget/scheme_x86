@@ -24,6 +24,24 @@
 
 #define heap_size 0x400000
 
+int scm_hello_from_c() {
+    printf("Hello from C!\n");
+    return empty_list;
+}
+
+int scm_add_two(int val) {
+    int shifted = val >> fixnum_shift;
+    return (shifted + 2) << fixnum_shift;
+}
+
+int scm_print_three_args(int arg1, int arg2, int arg3) {
+    int shifted1 = arg1 >> fixnum_shift;
+    int shifted2 = arg2 >> fixnum_shift;
+    int shifted3 = arg3 >> fixnum_shift;
+    printf("arg1=%d, arg2=%d, arg3=%d\n", shifted1, shifted2, shifted3);
+    return empty_list;
+}
+
 void print_value(int val) {
     if ((val & fixnum_mask) == fixnum_tag){
         printf("%d", val >> fixnum_shift);
