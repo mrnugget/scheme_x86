@@ -24,6 +24,11 @@
 
 #define heap_size 0x400000
 
+int scm_hello_from_c() {
+    printf("Hello from C!\n");
+    return empty_list;
+}
+
 void print_value(int val) {
     if ((val & fixnum_mask) == fixnum_tag){
         printf("%d", val >> fixnum_shift);

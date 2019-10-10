@@ -82,6 +82,7 @@
 (define-list-expr-check quote? 'quote)
 (define-list-expr-check if? 'if)
 (define-list-expr-check and? 'and)
+(define-list-expr-check foreign-call? 'foreign-call)
 
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
@@ -439,6 +440,17 @@
   ;; Now load what's at the label into %eax
   (emit "movl (%eax), %eax"))
 
+(define (emit-foreign-call expr stack-index env)
+  (let* ([call-target (format "scm_~a" (cadr expr))])
+
+    (emit "movl %edx, ~a(%esp)" stack-index)
+
+    (emit "subl $~a, %esp" (- stack-index))
+    (emit "call ~a" call-target)
+    (emit "addl $~a, %esp" (- stack-index))
+
+    (emit "movl ~a(%esp), %edx" stack-index)))
+
 (define (emit-expr expr stack-index env)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
         [(identifier? expr) (emit-identifier expr stack-index env)]
@@ -452,6 +464,8 @@
          (emit-load-label (cadr expr) stack-index env)]
         [(primitive-ref? expr)
          (emit-load-label (primitive-label (cadr expr)) stack-index env)]
+        [(foreign-call? expr)
+         (emit-foreign-call expr stack-index env)]
         [else (begin
                 (display (format "unrecognized form: ~a\n" expr))
                 (emit "movl $99, %eax"))]))
@@ -552,6 +566,12 @@
       ([identifier? expr] (list expr (if (member expr free-vars) '() (list expr))))
       ([not (list? expr)] (list expr '()))
 
+      ([foreign-call? expr]
+       (let* ([results (walk-and-annotate (cddr expr) free-vars)]
+              [annotated (car results)]
+              [free-vars (cadr results)])
+         (list `(foreign-call ,(cadr expr) ,@annotated) (remove-duplicates free-vars))))
+
       ([if? expr]
        (let* ([results (walk-and-annotate (cdr expr) free-vars)]
               [annotated (car results)]
@@ -637,6 +657,7 @@
       ([constant-ref? expr] expr)
       ([constant-init? expr] expr)
       ([primitive-ref? expr] expr)
+      ([foreign-call? expr] expr)
       (else `(funcall ,(transform (car expr))
                       ,@(map transform (cdr expr))))))
 
@@ -699,6 +720,10 @@
 
       ([not (list? expr)] expr)
       ([null? expr] expr)
+
+      ([foreign-call? expr] `(foreign-call ,(cadr expr) ,@(map transform (cddr expr))))
+
+      ([and (quote? expr) (immediate? (cdr expr))] (cdr expr))
 
       ([and (quote? expr) (immediate? (cdr expr))] (cdr expr))
       ([and (quote? expr) (assoc expr label-forms)] => cadr)
@@ -802,6 +827,8 @@
     (cond
       [(primitive-name? expr)
        `(primitive-ref ,expr)]
+      [(foreign-call? expr)
+       `(foreign-call ,(cadr expr) ,@(map transform (cddr expr)))]
       [(funcall? expr)
        `(funcall ,@(map transform (cdr expr)))]
       [(if? expr)
