@@ -441,15 +441,39 @@
   (emit "movl (%eax), %eax"))
 
 (define (emit-foreign-call expr stack-index env)
-  (let* ([call-target (format "scm_~a" (cadr expr))])
+  (let* ([call-target (format "scm_~a" (cadr expr))]
 
-    (emit "movl %edx, ~a(%esp)" stack-index)
+         ; For foreign calls, the args have to be above return address on stack,
+         ; so we don't reserve _two_ slots above them, as we do for internal calls.
+         ; Instead, we we reserve one slot for the current closure.
+         [args-start (- stack-index wordsize)]
 
-    (emit "subl $~a, %esp" (- stack-index))
+         ;; For foreign calls, we `(reverse)` the args because in the C
+         ;; calling convention, they're in a different order
+         [args (reverse (cddr expr))]
+         [args (map list args
+                    (map (lambda (i) (- args-start (* wordsize i)))
+                         (iota (length args))))]
+
+         [eval-stack-index (- args-start (* wordsize (length args)))])
+
+    (for-each
+      (lambda (arg) (begin (emit-expr (car arg) eval-stack-index env)
+                           (emit "movl %eax, ~a(%esp)" (cadr arg))))
+      args)
+
+
+    (emit "movl %edx, ~a(%esp)" (- stack-index))
+
+    ;; Since the return address needs a slot _below_ the args, we subtract
+    ;; `eval-stack-index` (which is how much space the args take up on the stack)
+    ;; and an additional `wordsize`, which is where the `call` will put the
+    ;; return address
+    (emit "subl $~a, %esp" (- (+ eval-stack-index wordsize)))
     (emit "call ~a" call-target)
-    (emit "addl $~a, %esp" (- stack-index))
+    (emit "addl $~a, %esp" (- (+ eval-stack-index wordsize)))
 
-    (emit "movl ~a(%esp), %edx" stack-index)))
+    (emit "movl ~a(%esp), %edx" (- stack-index))))
 
 (define (emit-expr expr stack-index env)
   (cond [(immediate? expr) (emit "movl $~a, %eax" (immediate-rep expr))]
