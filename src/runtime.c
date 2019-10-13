@@ -167,6 +167,15 @@ int scm_print_three_args(int arg1, int arg2, int arg3) {
     return empty_list;
 }
 
+int scm_print_two_strings(int str1, int str2) {
+    write(1, "str1=", 5);
+    write(1, string_data(str1), string_len(str1));
+    write(1, ", str2=", 7);
+    write(1, string_data(str2), string_len(str2));
+    printf("\n");
+    return empty_list;
+}
+
 int scm_exit(int exit_code) {
     exit(unshift(exit_code));
 }

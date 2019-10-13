@@ -688,7 +688,7 @@
   (let* ((transformed-expr (transform body-form))
         (new-labels-form (if (null? existing-label-forms)
                              label-forms
-                             (cons (car existing-label-forms) label-forms))))
+                             (append existing-label-forms label-forms))))
     `(labels ,new-labels-form
              ,constant-inits
              ,transformed-expr))))
