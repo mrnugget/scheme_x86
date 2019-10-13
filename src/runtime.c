@@ -41,41 +41,47 @@ int shift_fixnum(int num) {
     return num << fixnum_shift;
 }
 
-int scm_hello_from_c() {
-    printf("Hello from C!\n");
-    return empty_list;
+char *string_data(int str) {
+    int* p = (int*)(str - object_tag_string);
+    if (p == NULL) {
+        return NULL;
+    }
+
+    return (char *)(p + 1);
 }
 
-int scm_add_two(int val) {
-    return shift_fixnum((unshift(val) + 2));
-}
-
-int scm_print_three_args(int arg1, int arg2, int arg3) {
-    printf("arg1=%d, arg2=%d, arg3=%d\n", unshift(arg1), unshift(arg2), unshift(arg3));
-    return empty_list;
-}
-
-int scm_exit(int exit_code) {
-    exit(unshift(exit_code));
-}
-
-int scm_write(int fd, int str, int len) {
-    int* strp = (int*)(str - object_tag_string);
-    if (strp == NULL) {
+int string_len(int str) {
+    int* p = (int*)(str - object_tag_string);
+    if (p == NULL) {
         return 0;
     }
 
-    char *chars = (char *)(strp + 1);
+    return (int)*p;
+}
 
-    int c = write(unshift(fd), chars, unshift(len));
-    return shift_fixnum(c);
+int *vector_data(int vec) {
+    int* p = (int*)(vec - object_tag_vector);
+    if (p == NULL) {
+        return p;
+    }
+
+    return (int *)(p + 1);
+}
+
+int vector_len(int vec) {
+    int* p = (int*)(vec - object_tag_vector);
+    if (p == NULL) {
+        return 0;
+    }
+
+    return (int)*p;
 }
 
 void print_value(int val) {
     if ((val & fixnum_mask) == fixnum_tag){
-        printf("%d", val >> fixnum_shift);
+        printf("%d", unshift(val));
     } else if ((val & boolean_mask) == boolean_tag){
-        int boolval = val >> boolean_shift;
+        int boolval = unshift(val);
         if (boolval) {
             printf("#t");
         } else {
@@ -84,7 +90,7 @@ void print_value(int val) {
     } else if (val == empty_list){
         printf("()");
     } else if ((val & char_mask) == char_tag){
-        int c = val >> char_shift;
+        int c = unshift(val);
 
         if      (c == '\t') { printf("#\\tab"); }
         else if (c == '\n') { printf("#\\newline"); }
@@ -120,14 +126,8 @@ void print_value(int val) {
         }
         putchar(')');
     } else if ((val & object_mask) == object_tag_string) {
-        int* ptr = (int*)(val - object_tag_string);
-        if (ptr == NULL) {
-            printf("()");
-            return;
-        }
-
-        int length = *ptr;
-        char *str = (char *)(ptr + 1);
+        int length = string_len(val);
+        char *str = string_data(val);
 
         putchar('"');
         for (int i = 0; i < length; i++) {
@@ -136,14 +136,8 @@ void print_value(int val) {
         }
         putchar('"');
     } else if ((val & object_mask) == object_tag_vector) {
-        int* ptr = (int*)(val - object_tag_vector);
-        if (ptr == NULL) {
-            printf("()");
-            return;
-        }
-
-        int length = *ptr;
-        int *elements = (int *)(ptr + 1);
+        int length = vector_len(val);
+        int *elements = vector_data(val);
 
         printf("#(");
         for (int i = 0; i < length; i++) {
@@ -157,6 +151,29 @@ void print_value(int val) {
     } else {
         printf("unrecognized value: %d", val);
     }
+}
+
+int scm_hello_from_c() {
+    printf("Hello from C!\n");
+    return empty_list;
+}
+
+int scm_add_two(int val) {
+    return shift_fixnum((unshift(val) + 2));
+}
+
+int scm_print_three_args(int arg1, int arg2, int arg3) {
+    printf("arg1=%d, arg2=%d, arg3=%d\n", unshift(arg1), unshift(arg2), unshift(arg3));
+    return empty_list;
+}
+
+int scm_exit(int exit_code) {
+    exit(unshift(exit_code));
+}
+
+int scm_write(int fd, int str, int len) {
+    int c = write(unshift(fd), string_data(str), unshift(len));
+    return shift_fixnum(c);
 }
 
 int main(int argc, char** argv) {
