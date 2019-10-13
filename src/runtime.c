@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "runtime.h"
 
 #define fixnum_mask       3
@@ -56,6 +57,18 @@ int scm_print_three_args(int arg1, int arg2, int arg3) {
 
 int scm_exit(int exit_code) {
     exit(unshift(exit_code));
+}
+
+int scm_write(int fd, int str, int len) {
+    int* strp = (int*)(str - object_tag_string);
+    if (strp == NULL) {
+        return 0;
+    }
+
+    char *chars = (char *)(strp + 1);
+
+    int c = write(unshift(fd), chars, unshift(len));
+    return shift_fixnum(c);
 }
 
 void print_value(int val) {
