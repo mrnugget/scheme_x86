@@ -921,7 +921,9 @@
                                      (g x))))
     (list 'length '(lambda (lst) (if (prim-apply null? lst)
                              0
-                             (prim-apply add1 (length (prim-apply cdr lst))))))))
+                             (prim-apply add1 (length (prim-apply cdr lst))))))
+    (list 'error '(lambda (origin message)
+                    (foreign-call "error" origin message)))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls

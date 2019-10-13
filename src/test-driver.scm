@@ -5,13 +5,13 @@
     (error 'make "Could not build target.")))
 
 (define (execute)
-  (unless (zero? (system "./emitted > emitted.out"))
+  (unless (zero? (system "./emitted > emitted.out 2>emitted.stderr"))
     (error 'make "Produced program exited abnormally.")))
 
-(define (get-string)
+(define (read-out-file filename)
   (with-output-to-string
     (lambda ()
-      (with-input-from-file "emitted.out"
+      (with-input-from-file filename
         (lambda ()
           (let f ()
             (let ([c (read-char)])
@@ -19,17 +19,20 @@
                [(eof-object? c) (void)]
                [else (display c) (f)]))))))))
 
+(define (read-stdout) (read-out-file "emitted.out"))
+(define (read-stderr) (read-out-file "emitted.stderr"))
+
 (define (compile-program-to-file expr filename)
   (let ([p (open-output-file filename 'replace)])
     (parameterize ([compile-port p])
       (compile-program expr))
     (close-output-port p)))
 
-(define (run expr)
+(define (run expr read-fn)
   (compile-program-to-file expr "emitted.s")
   (build)
   (execute)
-  (get-string))
+  (read-fn))
 
 (define all-tests '())
 
@@ -41,6 +44,14 @@
             '(test-name [expr string output-string] ...)
             all-tests))]))
 
+(define-syntax add-tests-with-stderr-output
+  (syntax-rules (=>)
+    [(_ test-name [expr => output-string] ...)
+     (set! all-tests
+           (cons
+            '(test-name [expr stderr output-string] ...)
+            all-tests))]))
+
 (define-syntax add-tests-with-precompiled-output
   (syntax-rules (=>)
     [(_ test-name [expr => precompiled-expr] ...)
@@ -50,9 +61,16 @@
             all-tests))]))
 
 (define (test-with-string-output test-id expr expected-output)
-  (unless (string=? expected-output (run expr))
-    (error 'test (format "Output mismatch for test ~s, expected ~s, got ~s."
-                         test-id expected-output (get-string)))))
+  (let ([output (run expr read-stdout)])
+    (unless (string=? expected-output output)
+      (error 'test (format "Output mismatch for test ~s, expected ~s, got ~s."
+                           test-id expected-output output)))))
+
+(define (test-with-stderr test-id expr expected-output)
+  (let ([output (run expr read-stderr)])
+    (unless (string=? expected-output output)
+      (error 'test (format "Output mismatch for test ~s, expected ~s, got ~s."
+                           test-id expected-output output)))))
 
 (define (test-with-precompiled-output test-id expr expected-output)
   (let ((actual (precompile expr)))
@@ -77,6 +95,7 @@
     (set! label-count 0)
     (case type
      [(string) (test-with-string-output test-id expr out)]
+     [(stderr) (test-with-stderr test-id expr out)]
      [(precompiled) (test-with-precompiled-output test-id expr out)]
      [else (error 'test (format "Invalid test type ~s." type))])
     (printf " Ok.\n")))

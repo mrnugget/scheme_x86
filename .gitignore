@@ -2,3 +2,4 @@ src/emitted
 src/emitted.s
 src/lib.s
 src/emitted.out
+src/emitted.stderr

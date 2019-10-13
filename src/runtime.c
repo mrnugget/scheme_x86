@@ -185,6 +185,20 @@ int scm_write(int fd, int str, int len) {
     return shift_fixnum(c);
 }
 
+void scm_error(int origin, int msg) {
+    char *o = string_data(origin);
+    int olen = string_len(origin);
+    char *m = string_data(msg);
+    int mlen = string_len(msg);
+
+    fprintf(stderr, "Exception in ");
+    write(2, o, (size_t)olen);
+    fprintf(stderr, ": ");
+    write(2, m, (size_t)mlen);
+    fprintf(stderr, "\n");
+    exit(0);
+}
+
 int main(int argc, char** argv) {
     void* heap = aligned_alloc(8, heap_size);
 
