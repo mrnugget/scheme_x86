@@ -24,22 +24,38 @@
 
 #define heap_size 0x400000
 
+int unshift(int val) {
+    int shifted = 0;
+    if ((val & fixnum_mask) == fixnum_tag){
+        shifted = val >> fixnum_shift;
+    } else if ((val & boolean_mask) == boolean_tag){
+        shifted = val >> boolean_shift;
+    } else if ((val & char_mask) == char_tag){
+        shifted = val >> char_shift;
+    }
+    return shifted;
+}
+
+int shift_fixnum(int num) {
+    return num << fixnum_shift;
+}
+
 int scm_hello_from_c() {
     printf("Hello from C!\n");
     return empty_list;
 }
 
 int scm_add_two(int val) {
-    int shifted = val >> fixnum_shift;
-    return (shifted + 2) << fixnum_shift;
+    return shift_fixnum((unshift(val) + 2));
 }
 
 int scm_print_three_args(int arg1, int arg2, int arg3) {
-    int shifted1 = arg1 >> fixnum_shift;
-    int shifted2 = arg2 >> fixnum_shift;
-    int shifted3 = arg3 >> fixnum_shift;
-    printf("arg1=%d, arg2=%d, arg3=%d\n", shifted1, shifted2, shifted3);
+    printf("arg1=%d, arg2=%d, arg3=%d\n", unshift(arg1), unshift(arg2), unshift(arg3));
     return empty_list;
+}
+
+int scm_exit(int exit_code) {
+    exit(unshift(exit_code));
 }
 
 void print_value(int val) {
