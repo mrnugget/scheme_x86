@@ -399,11 +399,15 @@
                                                     (* wordsize stack-offset)))))
             args
             (iota (length args)))
+          ;; save number of args to %eax
+          (emit "movl $~a, %eax" (length args))
           (emit "jmp *(%edx)"))
 
         (begin
           ; advance %esp and call the function
           (emit "subl $~a, %esp" (- stack-index))
+          ;; save number of args to %eax
+          (emit "mov $~a, %eax" (length args))
           (emit "call *(%edx)")
 
           ; restore the stack pointer afterwards and reload our current closure
@@ -531,6 +535,15 @@
         [locals-start (- (* wordsize (+ 1 (length args))))])
 
        (emit-label name)
+
+       ;; Check whether number of passed args (saved in %eax) matches
+       ;; the number of args we expect
+       (let ([skip-label (unique-label)])
+         (emit "cmpl $~a, %eax" (length args))
+         (emit "je ~a" skip-label)
+         (emit-expr `(funcall (primitive-ref error-args)) locals-start env)
+         (emit-label skip-label))
+
        (emit-expr body locals-start inner-env)
        (emit "ret")))
     ([datum]
@@ -877,6 +890,7 @@
       ([prim-apply? expr]
        `(prim-apply ,(prim-apply-fn expr) ,@(map transform (prim-apply-args expr))))
       [(let? expr)
+       ;; TODO: We need to traverse the values of the let-bindings
        `(let ,(let-bindings expr) ,@(map transform (let-body expr)))]
       [(let*? expr)
        (let* ([first-binding (car (let-bindings expr))]
@@ -938,7 +952,9 @@
     (list 'error '(lambda (origin message)
                     (foreign-call "error" origin message)))
     (list 'error-apply '(lambda ()
-                    (foreign-call "error" "system" "attempt to apply non-procedure")))))
+                    (foreign-call "error" "system" "attempt to apply non-procedure")))
+    (list 'error-args '(lambda ()
+                    (foreign-call "error" "system" "wrong number of arguments")))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
