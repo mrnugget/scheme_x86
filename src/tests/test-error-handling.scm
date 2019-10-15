@@ -17,3 +17,7 @@
     (f 1)) => "Exception in system: wrong number of arguments\n"]
   [(let ([f (lambda (x y) (prim-apply + x y))])
     (f 3 4 5)) => "Exception in system: wrong number of arguments\n"])
+
+(add-tests-with-stderr-output "wrong arg to car/cdr"
+  [(prim-apply car 1) => "Exception in system: argument not a pair\n"]
+  [(prim-apply cdr 1) => "Exception in system: argument not a pair\n"])

@@ -124,6 +124,15 @@
     (lambda (e) (emit-expr e stack-index env))
     (reverse (prim-apply-args expr))))
 
+(define (emit-ensure-eax-is tag err-proc stack-index env)
+  (let ([skip-label (unique-label)])
+    (emit "movl %eax, %edi")
+    (emit "andl $~a, %edi" object-mask)
+    (emit "cmpl $~a, %edi" tag)
+    (emit "je ~a" skip-label)
+    (emit-expr `(funcall (primitive-ref ,err-proc)) stack-index env)
+    (emit-label skip-label)))
+
 (define (emit-prim-apply expr stack-index env)
   (case (prim-apply-fn expr)
     [(add1)
@@ -183,9 +192,11 @@
      (emit "addl $~a, %esi" (* 2 wordsize))]
     [(car)
      (emit-prim-apply-args expr stack-index env)
+     (emit-ensure-eax-is object-tag-pair 'error-no-pair stack-index env)
      (emit "movl -1(%eax), %eax")]
     [(cdr)
      (emit-prim-apply-args expr stack-index env)
+     (emit-ensure-eax-is object-tag-pair 'error-no-pair stack-index env)
      (emit "movl 3(%eax), %eax")]
     [(pair?) (emit-object-tag-eq? expr stack-index env object-tag-pair)]
     [(set-car!)
@@ -954,7 +965,9 @@
     (list 'error-apply '(lambda ()
                     (foreign-call "error" "system" "attempt to apply non-procedure")))
     (list 'error-args '(lambda ()
-                    (foreign-call "error" "system" "wrong number of arguments")))))
+                    (foreign-call "error" "system" "wrong number of arguments")))
+    (list 'error-no-pair '(lambda ()
+                    (foreign-call "error" "system" "argument not a pair")))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
