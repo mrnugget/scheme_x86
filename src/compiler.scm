@@ -373,6 +373,19 @@
 
     ;; evaluate closure we want to call
     (emit-expr call-target eval-stack-index env)
+
+    (unless (and (list? call-target) (equal? (cadr call-target) 'error-apply))
+      (let ([label (unique-label)])
+        ;; Save call target in tmp location %edi
+        (emit "mov %eax, %edi")
+        (emit "andl $~a, %eax" object-mask)
+        (emit "cmpl $~a, %eax" object-tag-closure)
+        (emit "je ~a" label)
+        (emit-expr `(funcall (primitive-ref error-apply)) stack-index env)
+        (emit-label label)
+        ;; Restore original call target from tmp location
+        (emit "mov %edi, %eax")))
+
     (emit "movl %edx, ~a(%esp)" stack-index)
     (emit "movl %eax, %edx")
     (emit "subl $~a, %edx" object-tag-closure)
@@ -923,7 +936,9 @@
                              0
                              (prim-apply add1 (length (prim-apply cdr lst))))))
     (list 'error '(lambda (origin message)
-                    (foreign-call "error" origin message)))))
+                    (foreign-call "error" origin message)))
+    (list 'error-apply '(lambda ()
+                    (foreign-call "error" "system" "attempt to apply non-procedure")))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
