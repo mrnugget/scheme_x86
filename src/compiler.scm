@@ -582,29 +582,42 @@
            (begin
              (emit-ensure-args-length '>= (sub1 args-len) locals-start env)
 
-             (let ([vararg (lookup (lambda-vararg-name args) inner-env)])
+             (let ([done-label (unique-label)]
+                   [build-list-label (unique-label)]
+                   [vararg (lookup (lambda-vararg-name args) inner-env)])
                ;; TODO: Creation of pair is duplicated from `emit-expr`
-
 
                ;; %eax holds number of args in call
                ;; Save %eax to tmp location %edi
                (emit "movl %eax, %edi")
 
+               ;; Check if we don't have any varargs
+               (emit "cmpl $~a, %edi" (sub1 args-len))
+               ;; If we have more, we build a list
+               (emit "jg ~a" build-list-label)
+               ;; Otherwise we just put empty-list in %eax and are done
+               (emit "movl $~a, %eax" empty-list)
+               (emit "jmp ~a" done-label)
+
+               (emit-label build-list-label)
                ;; Store "empty-list" in cdr of first pair
                (emit "movl $~a, ~a(%esi)" empty-list wordsize)
 
-               ;; Store last arg in car of first pair
                ;; TODO: we need to start with last arg.
                ;; The last vararg is located at: offset-of-first-arg + %eax
                ;; The first vararg is located at: offset-of-vararg
                ;; We need to loop down in `wordsize` decrements
+
+               ;; Store last arg in car of first pair
                (emit "movl ~a(%esp), %eax" (caddr vararg))
                (emit "movl %eax, 0(%esi)")
-               ;; save pointer and tag it, then increment heap ptr
+               ;; Save pointer and tag it, then increment heap ptr
                (emit "movl %esi, %eax")
                (emit "orl $~a, %eax" object-tag-pair)
                (emit "addl $~a, %esi" (* 2 wordsize))
+
                ;; Now overwrite location of first vararg on stack with new pair
+               (emit-label done-label)
                (emit "movl %eax, ~a(%esp)" (caddr vararg))
                ;; Restore %eax
                (emit "movl %edi, %eax"))))
