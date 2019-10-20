@@ -92,6 +92,18 @@
 
 (define (lambda-body x) (cddr x))
 (define (lambda-vars expr) (cadr expr))
+(define (flatten-lambda-vars vars)
+  (cond
+    [(list? vars) vars]
+    [(pair? vars) (cons (car vars) (flatten-lambda-vars (cdr vars)))]
+    [else (list vars)]))
+(define (lambda-vars-flattened expr)
+  (flatten-lambda-vars (cadr expr)))
+(define (lambda-varargs? args) (not (list? args)))
+(define (lambda-vararg-name args)
+  (if (not (pair? (cdr args)))
+      (cdr args)
+      (lambda-vararg-name (cdr args))))
 
 (define (identifier? expr) (symbol? expr))
 (define (let-bindings expr) (cadr expr))
@@ -528,32 +540,74 @@
 (define (free-vars-to-closure-offsets free-vars)
   (map (lambda (i) (* wordsize (+ 1 i))) (iota (length free-vars))))
 
+(define (emit-ensure-args-length op len stack-index env)
+  ;; Check whether number of passed args (saved in %eax) matches
+  ;; the number of args we expect
+  (let ([skip-label (unique-label)]
+        [jump-ins (case op
+                    ['== "je"]
+                    ['>= "jge"]
+                    [else "je"])])
+    (emit "cmpl $~a, %eax" len)
+    (emit "~a ~a" jump-ins skip-label)
+    (emit-expr `(funcall (primitive-ref error-args)) stack-index env)
+    (emit-label skip-label)))
+
 (define (emit-label-code label env)
   (case (caadr label)
     ([code]
      (let*
        ([code-form (cadr label)]
         [name (car label)]
-        [args (cadr code-form) ]
+
+        [args (cadr code-form)]
+        [flattened-args (flatten-lambda-vars args)]
+        [args-len (length flattened-args)]
+
+        [args-stack-offsets (args-to-stack-offsets flattened-args)]
         [free-vars (caddr code-form) ]
         [body (cadddr code-form) ]
         [inner-env
           (extend-env-frees free-vars
                             (free-vars-to-closure-offsets free-vars)
-                            (extend-env-vars args
-                                             (args-to-stack-offsets args)
+                            (extend-env-vars flattened-args
+                                             args-stack-offsets
                                              env))]
-        [locals-start (- (* wordsize (+ 1 (length args))))])
+        [locals-start (- (* wordsize (+ 1 args-len)))])
 
        (emit-label name)
 
-       ;; Check whether number of passed args (saved in %eax) matches
-       ;; the number of args we expect
-       (let ([skip-label (unique-label)])
-         (emit "cmpl $~a, %eax" (length args))
-         (emit "je ~a" skip-label)
-         (emit-expr `(funcall (primitive-ref error-args)) locals-start env)
-         (emit-label skip-label))
+       (if (not (lambda-varargs? args))
+           (emit-ensure-args-length '== args-len locals-start env)
+           (begin
+             (emit-ensure-args-length '>= (sub1 args-len) locals-start env)
+
+             (let ([vararg (lookup (lambda-vararg-name args) inner-env)])
+               ;; TODO: Creation of pair is duplicated from `emit-expr`
+
+
+               ;; %eax holds number of args in call
+               ;; Save %eax to tmp location %edi
+               (emit "movl %eax, %edi")
+
+               ;; Store "empty-list" in cdr of first pair
+               (emit "movl $~a, ~a(%esi)" empty-list wordsize)
+
+               ;; Store last arg in car of first pair
+               ;; TODO: we need to start with last arg.
+               ;; The last vararg is located at: offset-of-first-arg + %eax
+               ;; The first vararg is located at: offset-of-vararg
+               ;; We need to loop down in `wordsize` decrements
+               (emit "movl ~a(%esp), %eax" (caddr vararg))
+               (emit "movl %eax, 0(%esi)")
+               ;; save pointer and tag it, then increment heap ptr
+               (emit "movl %esi, %eax")
+               (emit "orl $~a, %eax" object-tag-pair)
+               (emit "addl $~a, %esi" (* 2 wordsize))
+               ;; Now overwrite location of first vararg on stack with new pair
+               (emit "movl %eax, ~a(%esp)" (caddr vararg))
+               ;; Restore %eax
+               (emit "movl %edi, %eax"))))
 
        (emit-expr body locals-start inner-env)
        (emit "ret")))
@@ -646,14 +700,15 @@
          (list `(prim-apply ,(cadr expr) ,@annotated) (remove-duplicates free))))
 
       ([lambda? expr]
-       (let* ([args (cadr expr)]
+       (let* ([args (lambda-vars expr)]
+              [flattened-args (lambda-vars-flattened expr)]
               [body-form (caddr expr)]
 
-              [results (walk-and-annotate body-form args)]
+              [results (walk-and-annotate body-form flattened-args)]
               [annotated (car results)]
               [free (cadr results)]
 
-              [free-without-args (filter (lambda (v) (not (memq v args))) free)])
+              [free-without-args (filter (lambda (v) (not (memq v flattened-args))) free)])
          (list `(lambda ,args ,free-without-args ,annotated)
                free-without-args)))
 
@@ -857,7 +912,7 @@
         [(set? expr) 
          `(prim-apply vector-set! ,(set-variable expr) 0 ,(transform (set-value expr)))]
         [(lambda? expr)
-         (let* ([vars (filter variable-assigned (lambda-vars expr))])
+         (let* ([vars (filter variable-assigned (lambda-vars-flattened expr))])
            `(lambda
               ,(lambda-vars expr)
               ,@(if (null? vars)
