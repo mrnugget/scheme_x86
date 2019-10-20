@@ -63,8 +63,11 @@
 (define (test-with-string-output test-id expr expected-output)
   (let ([output (run expr read-stdout)])
     (unless (string=? expected-output output)
-      (error 'test (format "Output mismatch for test ~s, expected ~s, got ~s."
-                           test-id expected-output output)))))
+      (let ([stderr (read-stderr)])
+        (when (not (eq? "" stderr))
+          (display (format "\nSTDERR: ~a\n" stderr)))
+        (error 'test (format "Output mismatch for test ~s, expected ~s, got ~s."
+                             test-id expected-output output))))))
 
 (define (test-with-stderr test-id expr expected-output)
   (let ([output (run expr read-stderr)])
