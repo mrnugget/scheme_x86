@@ -99,11 +99,12 @@
     [else (list vars)]))
 (define (lambda-vars-flattened expr)
   (flatten-lambda-vars (cadr expr)))
+(define (lambda-single-vararg? args) (symbol? args))
 (define (lambda-varargs? args) (not (list? args)))
 (define (lambda-vararg-name args)
-  (if (not (pair? (cdr args)))
-      (cdr args)
-      (lambda-vararg-name (cdr args))))
+  (cond [(symbol? args) args]
+        [(not (pair? (cdr args))) (cdr args)]
+        [else (lambda-vararg-name (cdr args))]))
 
 (define (identifier? expr) (symbol? expr))
 (define (let-bindings expr) (cadr expr))
@@ -553,6 +554,80 @@
     (emit-expr `(funcall (primitive-ref error-args)) stack-index env)
     (emit-label skip-label)))
 
+(define (emit-varargs-to-list vararg-name args-len-without-varargs env)
+  (let* ([done-label (unique-label)]
+         [setup-loop (unique-label)]
+         [loop-body (unique-label)]
+         [vararg (lookup vararg-name env)]
+         [vararg-offset (caddr vararg)])
+
+    ;; %eax holds number of args in call
+    ;; Save %eax to %ecx, which we use as a counter
+    (emit "movl %eax, %ecx")
+
+    ;; Check if we don't have any varargs
+    (emit "cmpl $~a, %ecx" args-len-without-varargs)
+    ;; If we have more, we build a list
+    (emit "jg ~a" setup-loop)
+    ;; Otherwise we just put empty-list in %eax and are done
+    (emit "movl $~a, %eax" empty-list)
+    (emit "jmp ~a" done-label)
+
+    ;; Setup loop to build list
+    (emit-label setup-loop)
+
+    ;; cdr of last pair in list (first to be created) is empty-list
+    (emit "movl $~a, %eax" empty-list)
+
+    ;; We use %ecx to keep the offset of the next vararg we want to
+    ;; turn into a pair.
+    ;; We start with the "last" argument, which is lowest on the stack.
+    ;; Minus "normal" args gives us number of varargs we have to
+    ;; turn into pairs. `sub1` because the first vararg is part of args.
+    (emit "subl $~a, %ecx" args-len-without-varargs)
+
+    ;; Shift by two, to get from "number of varargs" to "wordsize * number of varargs"
+    (emit "shl $~s, %ecx" 2)
+    ;; Since the stack offset of last arg is already pointing at first vararg
+    ;; we can ignore that offset
+    (emit "subl $~a, %ecx" wordsize)
+
+    ;; Loop body
+    (emit-label loop-body)
+
+    ;; Store %eax of last loop iteration (or setup) in cdr of pair
+    (emit "movl %eax, ~a(%esi)" wordsize)
+
+    ;; Here is the important part: getting value of current vararg from stack
+
+    ;; We "shift" %esp by the offset in %ecx so that the original offset
+    ;; of the last arg (which is the first vararg) points to the current
+    ;; vararg
+    (emit "sub %ecx, %esp")
+    ;; Store last arg in car of first pair
+    (emit "movl ~a(%esp), %eax" vararg-offset)
+    ;; Now we restore %esp's old value
+    (emit "add %ecx, %esp")
+
+    (emit "movl %eax, 0(%esi)")
+    ;; Save pointer in %eax and tag it, then increment heap ptr
+    (emit "movl %esi, %eax")
+    (emit "orl $~a, %eax" object-tag-pair)
+    (emit "addl $~a, %esi" (* 2 wordsize))
+
+    ;; Loop conditions:
+    ;; Decrement %ecx, so that %esp shifted by %ecx points to the next, lower vararg
+    (emit "subl $~s, %ecx" wordsize)
+    ;; If we still have an offset: start loop again
+    (emit "cmpl $0, %ecx")
+    (emit "jge ~a" loop-body)
+
+    ;; Now overwrite location of first vararg on stack with new pair
+    (emit-label done-label)
+    (emit "movl %eax, ~a(%esp)" vararg-offset)
+    ;; Restore %eax
+    (emit "movl %edi, %eax")))
+
 (define (emit-label-code label env)
   (case (caadr label)
     ([code]
@@ -577,83 +652,11 @@
 
        (emit-label name)
 
-       (if (not (lambda-varargs? args))
-           (emit-ensure-args-length '== args-len locals-start env)
+       (if (or (lambda-single-vararg? args) (lambda-varargs? args))
            (begin
              (emit-ensure-args-length '>= (sub1 args-len) locals-start env)
-
-             (let* ([done-label (unique-label)]
-                   [setup-loop (unique-label)]
-                   [loop-body (unique-label)]
-                   [vararg (lookup (lambda-vararg-name args) inner-env)]
-                   [vararg-offset (caddr vararg)])
-
-               ;; %eax holds number of args in call
-               ;; Save %eax to %ecx, which we use as a counter
-               (emit "movl %eax, %ecx")
-
-               ;; Check if we don't have any varargs
-               (emit "cmpl $~a, %ecx" (sub1 args-len))
-               ;; If we have more, we build a list
-               (emit "jg ~a" setup-loop)
-               ;; Otherwise we just put empty-list in %eax and are done
-               (emit "movl $~a, %eax" empty-list)
-               (emit "jmp ~a" done-label)
-
-               ;; Setup loop to build list
-               (emit-label setup-loop)
-
-               ;; cdr of last pair in list (first to be created) is empty-list
-               (emit "movl $~a, %eax" empty-list)
-
-               ;; We use %ecx to keep the offset of the next vararg we want to
-               ;; turn into a pair.
-               ;; We start with the "last" argument, which is lowest on the stack.
-               ;; Minus "normal" args gives us number of varargs we have to
-               ;; turn into pairs. `sub1` because the first vararg is part of args.
-               (emit "subl $~a, %ecx" (sub1 args-len))
-
-               ;; Shift by two, to get from "number of varargs" to "wordsize * number of varargs"
-               (emit "shl $~s, %ecx" 2)
-               ;; Since the stack offset of last arg is already pointing at first vararg
-               ;; we can ignore that offset
-               (emit "subl $~a, %ecx" wordsize)
-
-               ;; Loop body
-               (emit-label loop-body)
-
-               ;; Store %eax of last loop iteration (or setup) in cdr of pair
-               (emit "movl %eax, ~a(%esi)" wordsize)
-
-               ;; Here is the important part: getting value of current vararg from stack
-
-               ;; We "shift" %esp by the offset in %ecx so that the original offset
-               ;; of the last arg (which is the first vararg) points to the current
-               ;; vararg
-               (emit "sub %ecx, %esp")
-               ;; Store last arg in car of first pair
-               (emit "movl ~a(%esp), %eax" vararg-offset)
-               ;; Now we restore %esp's old value
-               (emit "add %ecx, %esp")
-
-               (emit "movl %eax, 0(%esi)")
-               ;; Save pointer in %eax and tag it, then increment heap ptr
-               (emit "movl %esi, %eax")
-               (emit "orl $~a, %eax" object-tag-pair)
-               (emit "addl $~a, %esi" (* 2 wordsize))
-
-               ;; Loop conditions:
-               ;; Decrement %ecx, so that %esp shifted by %ecx points to the next, lower vararg
-               (emit "subl $~s, %ecx" wordsize)
-               ;; If we still have an offset: start loop again
-               (emit "cmpl $0, %ecx")
-               (emit "jge ~a" loop-body)
-
-               ;; Now overwrite location of first vararg on stack with new pair
-               (emit-label done-label)
-               (emit "movl %eax, ~a(%esp)" (caddr vararg))
-               ;; Restore %eax
-               (emit "movl %edi, %eax"))))
+             (emit-varargs-to-list (lambda-vararg-name args) (sub1 args-len) inner-env))
+           (emit-ensure-args-length '== args-len locals-start env))
 
        (emit-expr body locals-start inner-env)
        (emit "ret")))
