@@ -554,19 +554,17 @@
     (emit-expr `(funcall (primitive-ref error-args)) stack-index env)
     (emit-label skip-label)))
 
-(define (emit-varargs-to-list vararg-name args-len-without-varargs env)
+(define (emit-varargs-to-list vararg-offset min-args env)
   (let* ([done-label (unique-label)]
          [setup-loop (unique-label)]
-         [loop-body (unique-label)]
-         [vararg (lookup vararg-name env)]
-         [vararg-offset (caddr vararg)])
+         [loop-body (unique-label)])
 
     ;; %eax holds number of args in call
     ;; Save %eax to %ecx, which we use as a counter
     (emit "movl %eax, %ecx")
 
     ;; Check if we don't have any varargs
-    (emit "cmpl $~a, %ecx" args-len-without-varargs)
+    (emit "cmpl $~a, %ecx" min-args)
     ;; If we have more, we build a list
     (emit "jg ~a" setup-loop)
     ;; Otherwise we just put empty-list in %eax and are done
@@ -584,7 +582,7 @@
     ;; We start with the "last" argument, which is lowest on the stack.
     ;; Minus "normal" args gives us number of varargs we have to
     ;; turn into pairs. `sub1` because the first vararg is part of args.
-    (emit "subl $~a, %ecx" args-len-without-varargs)
+    (emit "subl $~a, %ecx" min-args)
 
     ;; Shift by two, to get from "number of varargs" to "wordsize * number of varargs"
     (emit "shl $~s, %ecx" 2)
@@ -653,9 +651,9 @@
        (emit-label name)
 
        (if (or (lambda-single-vararg? args) (lambda-varargs? args))
-           (begin
+           (let ([vararg-offset (caddr (lookup (lambda-vararg-name args) inner-env))])
              (emit-ensure-args-length '>= (sub1 args-len) locals-start env)
-             (emit-varargs-to-list (lambda-vararg-name args) (sub1 args-len) inner-env))
+             (emit-varargs-to-list vararg-offset (sub1 args-len) inner-env))
            (emit-ensure-args-length '== args-len locals-start env))
 
        (emit-expr body locals-start inner-env)
