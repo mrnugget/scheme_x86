@@ -29,4 +29,9 @@
   [(prim-apply + 1 (prim-apply + 2 (prim-apply + 3 (prim-apply + 4 (prim-apply + 5 (prim-apply + 6 (prim-apply + 7 (prim-apply + 8 9)))))))) => "45\n"])
 
 (add-tests-with-string-output "binary primitive eq?"
-  [(prim-apply eq? 1 1)  => "#t\n"])
+  [(prim-apply eq? 1 1)  => "#t\n"]
+  [(prim-apply eq? 1 3)  => "#t\n"])
+
+(add-tests-with-string-output "binary primitive char=?"
+  [(prim-apply char=? #\a #\a)  => "#t\n"]
+  [(prim-apply char=? #\a #\z)  => "#f\n"])
