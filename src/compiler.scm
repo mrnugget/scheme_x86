@@ -260,6 +260,11 @@
      (emit "movzb (%eax), %eax")
      (emit "shl $~s, %eax" char-shift)
      (emit "or $~s, %eax" char-tag)]
+    [(string-length)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-string)
+     (emit "mov (%eax), %eax")
+     (emit "shl $~a, %eax" fixnum-shift)]
     [(make-vector)
      (emit-fixnum-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, 0(%esi)") ;; Store length at beginning of next memory slot
