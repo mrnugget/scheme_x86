@@ -63,3 +63,13 @@
  [(let ([f (lambda (z a) (prim-apply + z a))])
     (let ([g (lambda (x) (f x 99))])
       ((lambda (y) (g y)) 5))) => "104\n"])
+
+
+(add-tests-with-string-output "closures inside lambda"
+  ;; without enclosing lambda, should work
+  [(let ([x 1])
+     ((lambda () x))) => "1\n"]
+  ;; inside enclosing lambda
+  [((lambda ()
+      (let ([x 1])
+        ((lambda () x))))) => "1\n"])
