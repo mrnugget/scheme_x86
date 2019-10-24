@@ -49,6 +49,7 @@
 (define object-tag-vector 2)
 (define object-tag-string 3)
 (define object-tag-closure 6)
+(define object-tag-symbol 5)
 
 (define wordsize 4)
 
@@ -229,6 +230,11 @@
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "movl ~a(%esp), %edi" stack-index)
      (emit "movl %eax, ~a(%edi)" (- wordsize object-tag-pair))]
+    [(symbol?) (emit-object-tag-eq? expr stack-index env object-tag-symbol)]
+    [(make-symbol)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-string)
+     (emit "orl $~a, %eax" object-tag-symbol)]
     [(string?) (emit-object-tag-eq? expr stack-index env object-tag-string)]
     [(make-string)
      (emit-fixnum-expr (prim-apply-arg-1 expr) stack-index env)
@@ -889,6 +895,7 @@
       (list 'prim-apply 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
       [(vector? expr) (vector-constant->make-vector expr)]
       [(string? expr) (string-constant->make-string expr)]
+      [(symbol? expr) `((primitive-ref string->symbol) ,(translate-quote (symbol->string expr)))]
       [else (error 'translate-quote (format "don't know how to quote ~s" expr))]))
 
   (define (transform expr)
@@ -1066,6 +1073,8 @@
             (map primitive-init-label names))))
 
 (define primitives
+  ;; TODO: we should really have macros for this, or define and parse a
+  ;; separate file
   (list
     (list 'add-and-add-four '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
     (list 'add-three '(lambda (x) (prim-apply + 3 x)))
@@ -1105,7 +1114,8 @@
                                              (fill-chars (prim-apply add1 index) rest))))])
                          (fill-chars 0 chars)
                          s))))
-    ))
+    (list 'symbols-list '(prim-apply cons '() '()))
+    (list 'string->symbol '(lambda (s) s))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls

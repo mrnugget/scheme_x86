@@ -17,11 +17,12 @@
 
 #define empty_list 47
 
-#define object_mask       7 // Look at 3 bits
-#define object_tag_pair   1
-#define object_tag_vector 2
-#define object_tag_string 3
-#define object_tag_closure 6
+#define object_mask       7  // Look at 3 bits
+#define object_tag_pair   1  // 001
+#define object_tag_vector 2  // 010
+#define object_tag_string 3  // 011
+#define object_tag_symbol 5  // 101
+#define object_tag_closure 6 // 110
 
 #define heap_size 0x400000
 
@@ -59,6 +60,24 @@ int string_len(int str) {
     return (int)*p;
 }
 
+char *symbol_data(int str) {
+    int* p = (int*)(str - object_tag_symbol);
+    if (p == NULL) {
+        return NULL;
+    }
+
+    return (char *)(p + 1);
+}
+
+int symbol_len(int str) {
+    int* p = (int*)(str - object_tag_symbol);
+    if (p == NULL) {
+        return 0;
+    }
+
+    return (int)*p;
+}
+
 int *vector_data(int vec) {
     int* p = (int*)(vec - object_tag_vector);
     if (p == NULL) {
@@ -88,7 +107,6 @@ void print_value(int val) {
             printf("#f");
         }
     } else if (val == empty_list){
-        printf("()");
     } else if ((val & char_mask) == char_tag){
         int c = unshift(val);
 
@@ -135,6 +153,15 @@ void print_value(int val) {
             str++;
         }
         putchar('"');
+    } else if ((val & object_mask) == object_tag_symbol) {
+        int length = symbol_len(val);
+        char *str = symbol_data(val);
+
+        putchar('\'');
+        for (int i = 0; i < length; i++) {
+            putchar(*str);
+            str++;
+        }
     } else if ((val & object_mask) == object_tag_vector) {
         int length = vector_len(val);
         int *elements = vector_data(val);

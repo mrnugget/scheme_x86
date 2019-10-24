@@ -10,4 +10,5 @@
  [(string=? "f" "foo") => "#f\n"]
  [(string=? "fooo" "f") => "#f\n"]
  [(string #\a #\b #\c) => "\"abc\"\n"]
+ [(prim-apply pair? symbols-list) => "#t\n"]
  )
