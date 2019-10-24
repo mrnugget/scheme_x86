@@ -769,10 +769,13 @@
 
               [annotated-body (walk-and-annotate (let-body expr) (append binding-names free-vars))]
               [new-body (car annotated-body)]
-              [body-free-vars (cadr annotated-body)])
+              [body-free-vars (cadr annotated-body)]
+
+              [all-free-vars (filter (lambda (v) (not (memq v binding-names)))
+                                     (remove-duplicates (append body-free-vars bindings-free-vars)))])
 
          (list `(let ,(map list binding-names new-binding-bodies) ,@new-body)
-               (remove-duplicates (append body-free-vars bindings-free-vars)))))
+               all-free-vars)))
 
       (else (let* ([results (map (lambda (p) (walk-and-annotate p free-vars)) expr)]
                    [annotated (map car results)]
