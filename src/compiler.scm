@@ -168,6 +168,10 @@
     [(null?)
      (emit-prim-apply-args expr stack-index env)
      (emit-eax-eq? empty-list)]
+    [(not)
+     (emit-prim-apply-args expr stack-index env)
+     (emit "cmpl $~s, %eax" (immediate-rep #f))
+     (emit-eax-to-bool)]
     [(fixnum?)
      (emit-prim-apply-args expr stack-index env)
      (emit "andl $~a, %eax" fixnum-mask)
@@ -1007,7 +1011,7 @@
       [(if? expr)
        `(if ,(transform (if-condition expr))
             ,(transform (if-consequence expr))
-            ,(transform (if-alternative expr)))]
+            ,(if (if-alternative? expr) (transform (if-alternative expr)) '()))]
       [(lambda? expr)
        `(lambda ,(lambda-vars expr) ,@(map transform (lambda-body expr)))]
       ([prim-apply? expr]
@@ -1094,8 +1098,7 @@
     (list 'string '(lambda chars
                      (let ([s (prim-apply make-string (length chars))])
                        (letrec ([fill-chars (lambda (index args)
-                                       (if (prim-apply null? args)
-                                           #f
+                                       (if (prim-apply not (prim-apply null? args))
                                            (let ((arg (prim-apply car args))
                                                  (rest (prim-apply cdr args)))
                                              (prim-apply string-set! s index arg)
