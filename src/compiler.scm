@@ -1011,8 +1011,8 @@
       ([prim-apply? expr]
        `(prim-apply ,(prim-apply-fn expr) ,@(map transform (prim-apply-args expr))))
       [(let? expr)
-       ;; TODO: We need to traverse the values of the let-bindings
-       `(let ,(let-bindings expr) ,@(map transform (let-body expr)))]
+       (let ([bindings (map (lambda (b) (list (car b) (transform (cadr b)))) (let-bindings expr))])
+         `(let ,bindings ,@(map transform (let-body expr))))]
       [(let*? expr)
        (let* ([first-binding (car (let-bindings expr))]
               [transformed-first-binding (list (list (car first-binding)
@@ -1077,7 +1077,19 @@
     (list 'error-args '(lambda ()
                     (foreign-call "error" "system" "wrong number of arguments")))
     (list 'error-no-pair '(lambda ()
-                    (foreign-call "error" "system" "argument not a pair")))))
+                    (foreign-call "error" "system" "argument not a pair")))
+
+    (list 'string=? '(lambda (s1 s2)
+                       (letrec ([rec (lambda (index)
+                                       (if (prim-apply eq? index (prim-apply string-length s1))
+                                           #t
+                                           (if (prim-apply char=? (prim-apply string-ref s1 index) (prim-apply string-ref s2 index))
+                                                (rec (prim-apply add1 index))
+                                                #f)))])
+                         (and (prim-apply string? s1) (prim-apply string? s2)
+                              (prim-apply eq? (prim-apply string-length s1) (prim-apply string-length s2))
+                              (rec 0)))))
+    ))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
