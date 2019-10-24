@@ -6,4 +6,8 @@
  [(length '(1)) => "1\n"]
  [(length '(1 2 3 4 5 6 7)) => "7\n"]
  [(string=? "foo" "bar") => "#f\n"]
- [(string=? "foo" "foo") => "#t\n"])
+ [(string=? "foo" "foo") => "#t\n"]
+ [(string=? "f" "foo") => "#f\n"]
+ [(string=? "fooo" "f") => "#f\n"]
+ [(string #\a #\b #\c) => "\"abc\"\n"]
+ )

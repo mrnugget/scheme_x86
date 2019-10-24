@@ -129,6 +129,7 @@
 
 (define (if-condition expr) (cadr expr))
 (define (if-consequence expr) (caddr expr))
+(define (if-alternative? expr) (not (null? (cdddr expr))))
 (define (if-alternative expr) (cadddr expr))
 
 
@@ -375,7 +376,8 @@
     (emit-expr (if-consequence expr) stack-index env )
     (emit "jmp ~a" end-label)
     (emit-label alternative-label)
-    (emit-expr (if-alternative expr) stack-index env)
+    (if (if-alternative? expr)
+        (emit-expr (if-alternative expr) stack-index env))
     (emit-label end-label)))
 
 (define (emit-funcall expr stack-index env tailcall)
@@ -1089,6 +1091,17 @@
                          (and (prim-apply string? s1) (prim-apply string? s2)
                               (prim-apply eq? (prim-apply string-length s1) (prim-apply string-length s2))
                               (rec 0)))))
+    (list 'string '(lambda chars
+                     (let ([s (prim-apply make-string (length chars))])
+                       (letrec ([fill-chars (lambda (index args)
+                                       (if (prim-apply null? args)
+                                           #f
+                                           (let ((arg (prim-apply car args))
+                                                 (rest (prim-apply cdr args)))
+                                             (prim-apply string-set! s index arg)
+                                             (fill-chars (prim-apply add1 index) rest))))])
+                         (fill-chars 0 chars)
+                         s))))
     ))
 
 (define (precompile expr)
