@@ -3,7 +3,7 @@
     (prim-apply symbol? s)) => "#f\n"]
 
  [(let ((s "foobar"))
-    (prim-apply make-symbol s)) => "'foobar\n"]
+    (prim-apply make-symbol s)) => "foobar\n"]
 
  [(let ((s "foobar"))
     (let ((sym (prim-apply make-symbol s)))
@@ -16,15 +16,17 @@
  [(prim-apply symbol? (lambda (x) x)) => "#f\n"])
 
 (add-tests-with-string-output "quoting symbols"
- [(prim-apply symbol? 'foo) => "#t\n"])
-;  [(prim-apply string? 'foo) => "#f\n"]
-;  [(prim-apply pair? 'foo) => "#f\n"]
-;  [(prim-apply vector? 'foo) => "#f\n"]
-;  [(prim-apply null? 'foo) => "#f\n"]
-;  [(prim-apply boolean? 'foo) => "#f\n"]
-;  [(eq? 'foo 'bar) => "#f\n"]
-;  [(eq? 'foo 'foo) => "#t\n"]
-;  ['foo => "foo\n"]
-;  ['(foo bar baz) => "(foo bar baz)\n"]
-;  ['(foo foo foo foo foo foo foo foo foo foo foo) 
-;   => "(foo foo foo foo foo foo foo foo foo foo foo)\n"])
+ [(prim-apply symbol? 'foo) => "#t\n"]
+ [(prim-apply string? 'foo) => "#f\n"]
+ [(prim-apply pair? 'foo) => "#f\n"]
+ [(prim-apply vector? 'foo) => "#f\n"]
+ [(prim-apply null? 'foo) => "#f\n"]
+ [(prim-apply boolean? 'foo) => "#f\n"]
+
+ ['foo => "foo\n"]
+ ['(foo bar baz) => "(foo bar baz)\n"]
+ ['(foo foo foo foo foo foo foo foo foo foo foo)
+  => "(foo foo foo foo foo foo foo foo foo foo foo)\n"]
+
+ [(prim-apply eq? 'foo 'bar) => "#f\n"]
+ [(prim-apply eq? 'foo 'foo) => "#t\n"])

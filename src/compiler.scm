@@ -895,7 +895,7 @@
       (list 'prim-apply 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
       [(vector? expr) (vector-constant->make-vector expr)]
       [(string? expr) (string-constant->make-string expr)]
-      [(symbol? expr) `((primitive-ref string->symbol) ,(translate-quote (symbol->string expr)))]
+      [(symbol? expr) `(funcall (primitive-ref string->symbol) ,(translate-quote (symbol->string expr)))]
       [else (error 'translate-quote (format "don't know how to quote ~s" expr))]))
 
   (define (transform expr)
@@ -1115,7 +1115,7 @@
                          (fill-chars 0 chars)
                          s))))
     (list 'symbols-list '(prim-apply cons '() '()))
-    (list 'string->symbol '(lambda (s) s))))
+    (list 'string->symbol '(lambda (s) (prim-apply make-symbol s)))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls

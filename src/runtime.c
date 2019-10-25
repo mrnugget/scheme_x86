@@ -154,11 +154,9 @@ void print_value(int val) {
         }
         putchar('"');
     } else if ((val & object_mask) == object_tag_symbol) {
-        int length = symbol_len(val);
         char *str = symbol_data(val);
 
-        putchar('\'');
-        for (int i = 0; i < length; i++) {
+        for (int i = 0; i < symbol_len(val); i++) {
             putchar(*str);
             str++;
         }
