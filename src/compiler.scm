@@ -235,6 +235,10 @@
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "subl $~a, %eax" object-tag-string)
      (emit "orl $~a, %eax" object-tag-symbol)]
+    [(symbol->string)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-symbol)
+     (emit "orl $~a, %eax" object-tag-string)]
     [(string?) (emit-object-tag-eq? expr stack-index env object-tag-string)]
     [(make-string)
      (emit-fixnum-expr (prim-apply-arg-1 expr) stack-index env)
@@ -1009,6 +1013,7 @@
 (define (precompile-macro-expansion expr)
   (define (transform expr)
     (cond
+      [(primitive-ref? expr) expr]
       [(primitive-name? expr)
        `(primitive-ref ,expr)]
       [(foreign-call? expr)
@@ -1083,39 +1088,51 @@
                                    (let ((g (lambda (x) (prim-apply + 1 x))))
                                      (g x))))
     (list 'length '(lambda (lst) (if (prim-apply null? lst)
-                             0
-                             (prim-apply add1 (length (prim-apply cdr lst))))))
+                                     0
+                                     (prim-apply add1 (length (prim-apply cdr lst))))))
     (list 'error '(lambda (origin message)
                     (foreign-call "error" origin message)))
     (list 'error-apply '(lambda ()
-                    (foreign-call "error" "system" "attempt to apply non-procedure")))
+                          (foreign-call "error" "system" "attempt to apply non-procedure")))
     (list 'error-args '(lambda ()
-                    (foreign-call "error" "system" "wrong number of arguments")))
+                         (foreign-call "error" "system" "wrong number of arguments")))
     (list 'error-no-pair '(lambda ()
-                    (foreign-call "error" "system" "argument not a pair")))
+                            (foreign-call "error" "system" "argument not a pair")))
 
     (list 'string=? '(lambda (s1 s2)
                        (letrec ([rec (lambda (index)
                                        (if (prim-apply eq? index (prim-apply string-length s1))
                                            #t
                                            (if (prim-apply char=? (prim-apply string-ref s1 index) (prim-apply string-ref s2 index))
-                                                (rec (prim-apply add1 index))
-                                                #f)))])
+                                               (rec (prim-apply add1 index))
+                                               #f)))])
                          (and (prim-apply string? s1) (prim-apply string? s2)
                               (prim-apply eq? (prim-apply string-length s1) (prim-apply string-length s2))
                               (rec 0)))))
     (list 'string '(lambda chars
                      (let ([s (prim-apply make-string (length chars))])
                        (letrec ([fill-chars (lambda (index args)
-                                       (if (prim-apply not (prim-apply null? args))
-                                           (let ((arg (prim-apply car args))
-                                                 (rest (prim-apply cdr args)))
-                                             (prim-apply string-set! s index arg)
-                                             (fill-chars (prim-apply add1 index) rest))))])
+                                              (if (prim-apply not (prim-apply null? args))
+                                                  (let ((arg (prim-apply car args))
+                                                        (rest (prim-apply cdr args)))
+                                                    (prim-apply string-set! s index arg)
+                                                    (fill-chars (prim-apply add1 index) rest))))])
                          (fill-chars 0 chars)
                          s))))
-    (list 'symbols-list '(prim-apply cons '() '()))
-    (list 'string->symbol '(lambda (s) (prim-apply make-symbol s)))))
+
+    (list 'symbols_list '(prim-apply cons '() '()))
+    (list 'string->symbol '(lambda (s) (let ((existing (find_symbol s)))
+                                         (if existing existing
+                                             (let ((new (prim-apply make-symbol s)))
+                                               (prim-apply set-car! symbols_list (prim-apply cons new (prim-apply car symbols_list)))
+                                               new)))))
+    (list 'find_symbol '(lambda (str)
+                          (letrec ([rec (lambda (ls)
+                                          (if (prim-apply null? ls) #f
+                                              (if (string=? str (prim-apply symbol->string (prim-apply car ls)))
+                                                  (prim-apply car ls)
+                                                  (rec (prim-apply cdr ls)))))])
+                            (rec (prim-apply car symbols_list)))))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
