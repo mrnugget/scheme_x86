@@ -58,7 +58,10 @@
     (prim-apply string-set! s 1 #\b)
     (prim-apply string-set! s 2 #\c)
     (prim-apply string-ref s 2))
-   => "#\\c\n"])
+   => "#\\c\n"]
+  [(let ([s (prim-apply make-string 3)])
+    (prim-apply string-length s))
+   => "3\n"])
 
 (add-tests-with-string-output "vectors"
   [(prim-apply make-vector 0) => "#()\n"]

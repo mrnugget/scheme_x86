@@ -49,6 +49,7 @@
 (define object-tag-vector 2)
 (define object-tag-string 3)
 (define object-tag-closure 6)
+(define object-tag-symbol 5)
 
 (define wordsize 4)
 
@@ -129,6 +130,7 @@
 
 (define (if-condition expr) (cadr expr))
 (define (if-consequence expr) (caddr expr))
+(define (if-alternative? expr) (not (null? (cdddr expr))))
 (define (if-alternative expr) (cadddr expr))
 
 
@@ -167,6 +169,10 @@
     [(null?)
      (emit-prim-apply-args expr stack-index env)
      (emit-eax-eq? empty-list)]
+    [(not)
+     (emit-prim-apply-args expr stack-index env)
+     (emit "cmpl $~s, %eax" (immediate-rep #f))
+     (emit-eax-to-bool)]
     [(fixnum?)
      (emit-prim-apply-args expr stack-index env)
      (emit "andl $~a, %eax" fixnum-mask)
@@ -184,7 +190,7 @@
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "addl ~a(%esp), %eax" stack-index)]
-    [(eq?)
+    [(eq? char=?)
      (emit-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, ~a(%esp)" stack-index)
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
@@ -224,6 +230,15 @@
      (emit-expr (prim-apply-arg-2 expr) (- stack-index wordsize) env)
      (emit "movl ~a(%esp), %edi" stack-index)
      (emit "movl %eax, ~a(%edi)" (- wordsize object-tag-pair))]
+    [(symbol?) (emit-object-tag-eq? expr stack-index env object-tag-symbol)]
+    [(make-symbol)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-string)
+     (emit "orl $~a, %eax" object-tag-symbol)]
+    [(symbol->string)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-symbol)
+     (emit "orl $~a, %eax" object-tag-string)]
     [(string?) (emit-object-tag-eq? expr stack-index env object-tag-string)]
     [(make-string)
      (emit-fixnum-expr (prim-apply-arg-1 expr) stack-index env)
@@ -260,6 +275,11 @@
      (emit "movzb (%eax), %eax")
      (emit "shl $~s, %eax" char-shift)
      (emit "or $~s, %eax" char-tag)]
+    [(string-length)
+     (emit-expr (prim-apply-arg-1 expr) stack-index env)
+     (emit "subl $~a, %eax" object-tag-string)
+     (emit "mov (%eax), %eax")
+     (emit "shl $~a, %eax" fixnum-shift)]
     [(make-vector)
      (emit-fixnum-expr (prim-apply-arg-1 expr) stack-index env)
      (emit "movl %eax, 0(%esi)") ;; Store length at beginning of next memory slot
@@ -370,7 +390,8 @@
     (emit-expr (if-consequence expr) stack-index env )
     (emit "jmp ~a" end-label)
     (emit-label alternative-label)
-    (emit-expr (if-alternative expr) stack-index env)
+    (if (if-alternative? expr)
+        (emit-expr (if-alternative expr) stack-index env))
     (emit-label end-label)))
 
 (define (emit-funcall expr stack-index env tailcall)
@@ -878,6 +899,7 @@
       (list 'prim-apply 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
       [(vector? expr) (vector-constant->make-vector expr)]
       [(string? expr) (string-constant->make-string expr)]
+      [(symbol? expr) `(funcall (primitive-ref string->symbol) ,(translate-quote (symbol->string expr)))]
       [else (error 'translate-quote (format "don't know how to quote ~s" expr))]))
 
   (define (transform expr)
@@ -991,6 +1013,7 @@
 (define (precompile-macro-expansion expr)
   (define (transform expr)
     (cond
+      [(primitive-ref? expr) expr]
       [(primitive-name? expr)
        `(primitive-ref ,expr)]
       [(foreign-call? expr)
@@ -1000,14 +1023,14 @@
       [(if? expr)
        `(if ,(transform (if-condition expr))
             ,(transform (if-consequence expr))
-            ,(transform (if-alternative expr)))]
+            ,(if (if-alternative? expr) (transform (if-alternative expr)) '()))]
       [(lambda? expr)
        `(lambda ,(lambda-vars expr) ,@(map transform (lambda-body expr)))]
       ([prim-apply? expr]
        `(prim-apply ,(prim-apply-fn expr) ,@(map transform (prim-apply-args expr))))
       [(let? expr)
-       ;; TODO: We need to traverse the values of the let-bindings
-       `(let ,(let-bindings expr) ,@(map transform (let-body expr)))]
+       (let ([bindings (map (lambda (b) (list (car b) (transform (cadr b)))) (let-bindings expr))])
+         `(let ,bindings ,@(map transform (let-body expr))))]
       [(let*? expr)
        (let* ([first-binding (car (let-bindings expr))]
               [transformed-first-binding (list (list (car first-binding)
@@ -1055,6 +1078,8 @@
             (map primitive-init-label names))))
 
 (define primitives
+  ;; TODO: we should really have macros for this, or define and parse a
+  ;; separate file
   (list
     (list 'add-and-add-four '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
     (list 'add-three '(lambda (x) (prim-apply + 3 x)))
@@ -1063,16 +1088,51 @@
                                    (let ((g (lambda (x) (prim-apply + 1 x))))
                                      (g x))))
     (list 'length '(lambda (lst) (if (prim-apply null? lst)
-                             0
-                             (prim-apply add1 (length (prim-apply cdr lst))))))
+                                     0
+                                     (prim-apply add1 (length (prim-apply cdr lst))))))
     (list 'error '(lambda (origin message)
                     (foreign-call "error" origin message)))
     (list 'error-apply '(lambda ()
-                    (foreign-call "error" "system" "attempt to apply non-procedure")))
+                          (foreign-call "error" "system" "attempt to apply non-procedure")))
     (list 'error-args '(lambda ()
-                    (foreign-call "error" "system" "wrong number of arguments")))
+                         (foreign-call "error" "system" "wrong number of arguments")))
     (list 'error-no-pair '(lambda ()
-                    (foreign-call "error" "system" "argument not a pair")))))
+                            (foreign-call "error" "system" "argument not a pair")))
+
+    (list 'string=? '(lambda (s1 s2)
+                       (letrec ([rec (lambda (index)
+                                       (if (prim-apply eq? index (prim-apply string-length s1))
+                                           #t
+                                           (if (prim-apply char=? (prim-apply string-ref s1 index) (prim-apply string-ref s2 index))
+                                               (rec (prim-apply add1 index))
+                                               #f)))])
+                         (and (prim-apply string? s1) (prim-apply string? s2)
+                              (prim-apply eq? (prim-apply string-length s1) (prim-apply string-length s2))
+                              (rec 0)))))
+    (list 'string '(lambda chars
+                     (let ([s (prim-apply make-string (length chars))])
+                       (letrec ([fill-chars (lambda (index args)
+                                              (if (prim-apply not (prim-apply null? args))
+                                                  (let ((arg (prim-apply car args))
+                                                        (rest (prim-apply cdr args)))
+                                                    (prim-apply string-set! s index arg)
+                                                    (fill-chars (prim-apply add1 index) rest))))])
+                         (fill-chars 0 chars)
+                         s))))
+
+    (list 'symbols_list '(prim-apply cons '() '()))
+    (list 'string->symbol '(lambda (s) (let ((existing (find_symbol s)))
+                                         (if existing existing
+                                             (let ((new (prim-apply make-symbol s)))
+                                               (prim-apply set-car! symbols_list (prim-apply cons new (prim-apply car symbols_list)))
+                                               new)))))
+    (list 'find_symbol '(lambda (str)
+                          (letrec ([rec (lambda (ls)
+                                          (if (prim-apply null? ls) #f
+                                              (if (string=? str (prim-apply symbol->string (prim-apply car ls)))
+                                                  (prim-apply car ls)
+                                                  (rec (prim-apply cdr ls)))))])
+                            (rec (prim-apply car symbols_list)))))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls

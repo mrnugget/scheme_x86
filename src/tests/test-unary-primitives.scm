@@ -78,6 +78,10 @@
    [(prim-apply boolean? (prim-apply boolean? 0)) => "#t\n"]
    [(prim-apply boolean? (prim-apply fixnum? (prim-apply boolean? 0))) => "#t\n"])
 
+(add-tests-with-string-output "not"
+   [(prim-apply not #t) => "#f\n"]
+   [(prim-apply not (prim-apply null? '())) => "#f\n"])
+
 (add-tests-with-string-output "char?"
    [(prim-apply char? #\a) => "#t\n"]
    [(prim-apply char? #\Z) => "#t\n"]

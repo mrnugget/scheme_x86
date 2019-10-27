@@ -88,3 +88,29 @@
                                            0
                                            (prim-apply add1 (user-length (prim-apply cdr lst)))))])
      (user-length '(1 2 3))) => "3\n"])
+
+(add-tests-with-string-output "user-defined string=?"
+  [((lambda ()
+      (letrec ([rec (lambda (index)
+                      (if (prim-apply eq? index 10)
+                          #t
+                          (rec (prim-apply add1 index))))])
+        (rec 0)))) => "#t\n"]
+  [(let ([user-string-eq (lambda (s1 s2)
+                           (letrec ([rec (lambda (index)
+                                           (if (prim-apply eq? index (prim-apply string-length s1))
+                                               #t
+                                               (if (prim-apply
+                                                     char=?
+                                                     (prim-apply string-ref s1 index)
+                                                     (prim-apply string-ref s2 index))
+                                                   (rec (prim-apply add1 index))
+                                                   #f)))])
+                             (and (prim-apply string? s1)
+                                  (prim-apply string? s2)
+                                  (prim-apply
+                                    eq?
+                                    (prim-apply string-length s1)
+                                    (prim-apply string-length s2))
+                                  (rec 0))))])
+     (user-string-eq "foobar" "foobar")) => "#t\n"])
