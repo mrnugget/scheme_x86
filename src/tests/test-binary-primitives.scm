@@ -30,7 +30,7 @@
 
 (add-tests-with-string-output "binary primitive eq?"
   [(prim-apply eq? 1 1)  => "#t\n"]
-  [(prim-apply eq? 1 3)  => "#t\n"])
+  [(prim-apply eq? 1 3)  => "#f\n"])
 
 (add-tests-with-string-output "binary primitive char=?"
   [(prim-apply char=? #\a #\a)  => "#t\n"]
