@@ -107,6 +107,7 @@ void print_value(int val) {
             printf("#f");
         }
     } else if (val == empty_list){
+        printf("()");
     } else if ((val & char_mask) == char_tag){
         int c = unshift(val);
 
