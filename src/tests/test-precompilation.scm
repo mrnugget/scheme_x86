@@ -47,13 +47,15 @@
        (let ([g (closure label_0)])
          (funcall (closure label_1 g) 5)))]
 
-  [(let ([g (lambda (x) (other-func x x))]
-     (g 5)))
+  [(let ([other-func (lambda (x y) (prim-apply + x y))])
+     (let ([g (lambda (x) (other-func x x))])
+       (g 5)))
   => (labels
-       ((label_0
-          (code (x) (other-func) (tailcall other-func x x))))
+       ((label_1 (code (x_1) (other-func) (tailcall other-func x_1 x_1)))
+        (label_0 (code (x y) () (prim-apply + x y))))
        ()
-       (let ([g (closure label_0 other-func)] [g 5])))])
+       (let ([other-func (closure label_0)])
+         (let ([g (closure label_1 other-func)]) (funcall g 5))))])
 
 (add-tests-with-precompiled-output "constants to labels"
   [(let ((f (lambda () (quote (1 . "H")))))

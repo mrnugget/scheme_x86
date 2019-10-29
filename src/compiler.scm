@@ -85,6 +85,15 @@
 (define-list-expr-check and? 'and)
 (define-list-expr-check foreign-call? 'foreign-call)
 
+(define builtin-forms '(if let lambda closure set! quote))
+(define builtin-primitives
+  '(add1 sub1 fixnum->char char->fixnum zero? null?
+         not fixnum? boolean? char? + eq? char=? cons
+         car cdr pair? set-car! set-cdr! symbol?
+         make-symbol symbol->string string? make-string
+         string-set! string-ref string-length make-vector
+         vector? vector-set! vector-ref closure?))
+
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
 
@@ -1054,6 +1063,85 @@
 
   (transform expr))
 
+(define (precompile-alpha-conversion expr)
+  (define (gen-name name count)
+    (string->symbol (string-append (symbol->string name) "_" (number->string count))))
+
+  (define unique-name
+    (let ([counts '()])
+      (lambda (name)
+        (cond
+          [(assv name counts) => (lambda (p) (let ([count (cdr p)])
+                                               (set-cdr! p (add1 count))
+                                               (gen-name name count)))]
+          [(or (primitive-name? name) (builtin-name? name))
+           (set! counts (cons (cons name 1) counts))
+           (unique-name name)]
+          [else
+            (set! counts (cons (cons name 1) counts))
+            name]))))
+
+  (define (builtin-name? symbol)
+    (or (member symbol builtin-forms)
+        (member symbol builtin-primitives)))
+
+  (define (bulk-extend-env vars vals env)
+    (append (map list vars vals) env))
+
+  (define (lookup-name name env)
+    (cond
+      [(lookup name env) => cadr]
+      [else #f]))
+
+  (define (map-lambda-params f params)
+    (cond
+      [(list? params) (map (lambda (x)
+                             (if (pair? x)
+                                 (cons (f (car x)) (cdr x))
+                                 (f x)))
+                           params)]
+      [(pair? params) (cons (f (car params))
+                            (map-lambda-params f (cdr params)))]
+      [else (f params)]))
+
+  (define (transform expr env)
+    (cond
+      [(identifier? expr) expr
+                          (or (lookup-name expr env)
+                              (and (primitive-name? expr) expr)
+                              (and (builtin-name? expr) expr)
+                              (error 'alpha-conversion (format "undefined variable ~s" expr)))]
+      [(lambda? expr)
+       (let* ([params (lambda-vars-flattened expr)]
+              [new-env (bulk-extend-env params (map unique-name params) env)])
+         `(lambda
+            ,(map-lambda-params (lambda (v) (lookup-name v new-env)) (lambda-vars expr))
+            ,@(transform (lambda-body expr) new-env)))]
+
+      [(let? expr)
+       (let* ([bindings (let-bindings expr)]
+              [names (map car bindings)]
+              [new-env (bulk-extend-env names (map unique-name names) env)])
+         `(let
+            ,(map (lambda (binding)
+                    (list (lookup-name (car binding) new-env)
+                          (transform (cadr binding) env)))
+                  bindings)
+            ,@(map (lambda (e) (transform e new-env)) (let-body expr))))]
+      [(quote? expr) expr]
+      [(primitive-ref? expr) expr]
+      [(prim-apply? expr)
+       `(prim-apply ,(prim-apply-fn expr)
+                    ,@(map (lambda (e) (transform e env)) (prim-apply-args expr)))]
+      [(foreign-call? expr)
+       `(foreign-call ,(cadr expr) ,@(map (lambda (e) (transform e env)) (cddr expr)))]
+      [(funcall? expr)
+       `(funcall ,@(map (lambda (e) (transform e env)) (cdr expr)))]
+      [(list? expr) (map (lambda (e) (transform e env)) expr)]
+      [else expr]))
+
+  (transform expr (new-env)))
+
 (define (sanitize-label name)
   (define (replace-char c)
     (case c
@@ -1140,7 +1228,8 @@
       (precompile-add-constants
         (precompile-annotate-free-vars
           (precompile-transform-assignments
-            (precompile-macro-expansion expr)))))))
+            (precompile-alpha-conversion
+              (precompile-macro-expansion expr))))))))
 
 (define (compile-primitives primitives)
   (define (compile-primitive p)

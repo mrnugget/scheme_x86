@@ -5,12 +5,12 @@
      (prim-apply + result z)) => "6\n"])
 
 (add-tests-with-precompiled-output "let* to let"
-  [(let* ([x 1]) (prim-apply + x y))
+  [(let* ([x 1]) (prim-apply + x x))
    => (labels
         ()
         ()
         (let ((x 1))
-          (prim-apply + x y)))]
+          (prim-apply + x x)))]
 
   [(let* ([x 1] [y 2]) (prim-apply + x y))
    => (labels
