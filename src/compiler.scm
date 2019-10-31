@@ -1061,45 +1061,47 @@
                             (map-lambda-params f (cdr params)))]
       [else (f params)]))
 
-  (define (transform expr)
+  (define (map-transform ls env) (map (lambda (e) (transform e env)) ls))
+  (define (transform expr env)
     (cond
       [(primitive-ref? expr) expr]
       [(primitive-name? expr)
        `(primitive-ref ,expr)]
-      [(foreign-call? expr) `(foreign-call ,(cadr expr) ,@(map transform (cddr expr)))]
-      [(funcall? expr) `(funcall ,@(map transform (cdr expr)))]
+      [(foreign-call? expr) `(foreign-call ,(cadr expr) ,@(map-transform (cddr expr) env))]
+      [(funcall? expr) `(funcall ,@(map-transform (cdr expr) env))]
       [(if? expr)
-       `(if ,(transform (if-condition expr))
-            ,(transform (if-consequence expr))
-            ,(if (if-alternative? expr) (transform (if-alternative expr)) '()))]
+       `(if ,(transform (if-condition expr) env)
+            ,(transform (if-consequence expr) env)
+            ,(if (if-alternative? expr) (transform (if-alternative expr) env) '()))]
       [(lambda? expr)
-       `(lambda ,(lambda-vars expr) ,@(map transform (lambda-body expr)))]
+       `(lambda ,(lambda-vars expr) ,@(map-transform (lambda-body expr) env))]
       ([prim-apply? expr]
-       `(prim-apply ,(prim-apply-fn expr) ,@(map transform (prim-apply-args expr))))
+       `(prim-apply ,(prim-apply-fn expr) ,@(map-transform (prim-apply-args expr) env)))
       [(let? expr)
-       (let ([bindings (map (lambda (b) (list (car b) (transform (cadr b)))) (let-bindings expr))])
-         `(let ,bindings ,@(map transform (let-body expr))))]
+       (let ([bindings (map (lambda (b) (list (car b) (transform (cadr b) env))) (let-bindings expr))])
+         `(let ,bindings ,@(map-transform (let-body expr) env)))]
       [(let*? expr)
        (let* ([first-binding (car (let-bindings expr))]
               [transformed-first-binding (list (list (car first-binding)
-                                                     (transform (cadr first-binding))))]
+                                                     (transform (cadr first-binding) env)))]
               [rest-bindings (cdr (let-bindings expr))])
          (transform (if (null? rest-bindings)
-             `(let ,transformed-first-binding ,@(map transform (let-body expr)))
-             `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))))]
+             `(let ,transformed-first-binding ,@(map-transform (let-body expr) env))
+             `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))
+                    env))]
       [(letrec? expr)
        (let* ([bindings (let-bindings expr)]
               [new-bindings (map (lambda (b) `(,(car b) #f)) bindings)]
               [inits (map (lambda (b) `(set! ,(car b) ,(cadr b))) bindings)])
-         (transform `(let ,new-bindings ,@inits ,@(map transform (let-body expr)))))]
+         (transform `(let ,new-bindings ,@inits ,@(map-transform (let-body expr) env)) env))]
       [(and? expr)
        (cond [(null? (cdr expr)) #t]
-             [(null? (cddr expr)) (transform (cadr expr))]
-             [else (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f))])]
-      [(list? expr) (map transform expr)]
+             [(null? (cddr expr)) (transform (cadr expr) env)]
+             [else (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f) env)])]
+      [(list? expr) (map-transform expr env)]
       [else expr]))
 
-  (transform expr))
+  (transform expr new-env))
 
 (define (precompile-alpha-conversion expr)
   (define (gen-name name count)
