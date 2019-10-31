@@ -1142,6 +1142,7 @@
                             (map-lambda-params f (cdr params)))]
       [else (f params)]))
 
+  (define (map-transform ls env) (map (lambda (e) (transform e env)) ls))
   (define (transform expr env)
     (cond
       [(identifier? expr) expr
@@ -1165,17 +1166,14 @@
                     (list (lookup-name (car binding) new-env)
                           (transform (cadr binding) env)))
                   bindings)
-            ,@(map (lambda (e) (transform e new-env)) (let-body expr))))]
+            ,@(map-transform (let-body expr) new-env)))]
       [(quote? expr) expr]
       [(primitive-ref? expr) expr]
-      [(prim-apply? expr)
-       `(prim-apply ,(prim-apply-fn expr)
-                    ,@(map (lambda (e) (transform e env)) (prim-apply-args expr)))]
-      [(foreign-call? expr)
-       `(foreign-call ,(cadr expr) ,@(map (lambda (e) (transform e env)) (cddr expr)))]
+      [(prim-apply? expr) `(prim-apply ,(prim-apply-fn expr) ,@(map-transform (prim-apply-args expr) env))]
+      [(foreign-call? expr) `(foreign-call ,(cadr expr) ,@(map-transform (cddr expr) env))]
       [(funcall? expr)
-       `(funcall ,@(map (lambda (e) (transform e env)) (cdr expr)))]
-      [(list? expr) (map (lambda (e) (transform e env)) expr)]
+       `(funcall ,@(map-transform (cdr expr) env))]
+      [(list? expr) (map-transform expr env)]
       [else expr]))
 
   (transform expr (new-env)))
