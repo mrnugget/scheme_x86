@@ -1147,11 +1147,11 @@
   (define (map-transform ls env) (map (lambda (e) (transform e env)) ls))
   (define (transform expr env)
     (cond
-      [(identifier? expr) expr
-                          (or (lookup-name expr env)
-                              (and (primitive-name? expr) expr)
-                              (and (builtin-name? expr) expr)
-                              (error 'alpha-conversion (format "undefined variable ~s" expr)))]
+      [(identifier? expr)
+       (or (lookup-name expr env)
+           (and (primitive-name? expr) expr)
+           (and (builtin-name? expr) expr)
+           (error 'alpha-conversion (format "undefined variable ~s" expr)))]
       [(lambda? expr)
        (let* ([params (lambda-vars-flattened expr)]
               [new-env (bulk-extend-env params (map unique-name params) env)])
