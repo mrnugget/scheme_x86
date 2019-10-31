@@ -84,6 +84,7 @@
 (define-list-expr-check if? 'if)
 (define-list-expr-check and? 'and)
 (define-list-expr-check foreign-call? 'foreign-call)
+(define-list-expr-check prim-apply? 'prim-apply)
 
 (define builtin-forms '(if let lambda closure set! quote))
 (define builtin-primitives
@@ -1020,15 +1021,53 @@
     (transform expr)))
 
 (define (precompile-macro-expansion expr)
+  (define (gen-name name count)
+    (string->symbol (string-append (symbol->string name) "_" (number->string count))))
+
+  (define unique-name
+    (let ([counts '()])
+      (lambda (name)
+        (cond
+          [(assv name counts) => (lambda (p) (let ([count (cdr p)])
+                                               (set-cdr! p (add1 count))
+                                               (gen-name name count)))]
+          [(or (primitive-name? name) (builtin-name? name))
+           (set! counts (cons (cons name 1) counts))
+           (unique-name name)]
+          [else
+            (set! counts (cons (cons name 1) counts))
+            name]))))
+
+  (define (builtin-name? symbol)
+    (or (member symbol builtin-forms)
+        (member symbol builtin-primitives)))
+
+  (define (bulk-extend-env vars vals env)
+    (append (map list vars vals) env))
+
+  (define (lookup-name name env)
+    (cond
+      [(lookup name env) => cadr]
+      [else #f]))
+
+  (define (map-lambda-params f params)
+    (cond
+      [(list? params) (map (lambda (x)
+                             (if (pair? x)
+                                 (cons (f (car x)) (cdr x))
+                                 (f x)))
+                           params)]
+      [(pair? params) (cons (f (car params))
+                            (map-lambda-params f (cdr params)))]
+      [else (f params)]))
+
   (define (transform expr)
     (cond
       [(primitive-ref? expr) expr]
       [(primitive-name? expr)
        `(primitive-ref ,expr)]
-      [(foreign-call? expr)
-       `(foreign-call ,(cadr expr) ,@(map transform (cddr expr)))]
-      [(funcall? expr)
-       `(funcall ,@(map transform (cdr expr)))]
+      [(foreign-call? expr) `(foreign-call ,(cadr expr) ,@(map transform (cddr expr)))]
+      [(funcall? expr) `(funcall ,@(map transform (cdr expr)))]
       [(if? expr)
        `(if ,(transform (if-condition expr))
             ,(transform (if-consequence expr))
@@ -1048,7 +1087,6 @@
          (transform (if (null? rest-bindings)
              `(let ,transformed-first-binding ,@(map transform (let-body expr)))
              `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))))]
-
       [(letrec? expr)
        (let* ([bindings (let-bindings expr)]
               [new-bindings (map (lambda (b) `(,(car b) #f)) bindings)]
