@@ -95,7 +95,7 @@
          string-set! string-ref string-length make-vector
          vector? vector-set! vector-ref closure?))
 
-(define (builtin-prim-application? expr)
+(define (builtin-prim-apply? expr)
   (and (list? expr)
        (not (null? expr))
        (symbol? (car expr))
@@ -1076,7 +1076,7 @@
       [(primitive-name? expr) `(primitive-ref ,expr)] ;; TODO: primitive-name should be lib-primitives-name
       [(primitive-ref? expr) expr] ;; Nothing to do if it's already a primitive-ref
       ;; Tag calls to builtin primitives
-      [(builtin-prim-application? expr) `(prim-apply ,(car expr) ,@(map-transform (cdr expr) env))]
+      [(builtin-prim-apply? expr) `(prim-apply ,(car expr) ,@(map-transform (cdr expr) env))]
       ;; Tag foreign calls
       [(foreign-call? expr) `(foreign-call ,(cadr expr) ,@(map-transform (cddr expr) env))]
 
