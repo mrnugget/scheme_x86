@@ -72,7 +72,7 @@
 (define-list-expr-check tailcall? 'tailcall)
 (define-list-expr-check constant-ref? 'constant-ref)
 (define-list-expr-check constant-init? 'constant-init)
-(define-list-expr-check primitive-ref? 'primitive-ref)
+(define-list-expr-check lib-primitive-ref? 'lib-primitive-ref)
 (define-list-expr-check closure? 'closure)
 (define-list-expr-check lambda? 'lambda)
 (define-list-expr-check set? 'set!)
@@ -161,7 +161,7 @@
     (emit "andl $~a, %edi" object-mask)
     (emit "cmpl $~a, %edi" tag)
     (emit "je ~a" skip-label)
-    (emit-expr `(funcall (primitive-ref ,err-proc)) stack-index env)
+    (emit-expr `(funcall (lib-primitive-ref ,err-proc)) stack-index env)
     (emit-label skip-label)))
 
 (define (emit-prim-apply expr stack-index env)
@@ -442,7 +442,7 @@
         (emit "andl $~a, %eax" object-mask)
         (emit "cmpl $~a, %eax" object-tag-closure)
         (emit "je ~a" label)
-        (emit-expr `(funcall (primitive-ref error-apply)) stack-index env)
+        (emit-expr `(funcall (lib-primitive-ref error-apply)) stack-index env)
         (emit-label label)
         ;; Restore original call target from tmp location
         (emit "mov %edi, %eax")))
@@ -564,7 +564,7 @@
         [(closure? expr) (emit-closure expr stack-index env)]
         [(constant-ref? expr)
          (emit-load-label (cadr expr) stack-index env)]
-        [(primitive-ref? expr)
+        [(lib-primitive-ref? expr)
          (emit-load-label (primitive-label (cadr expr)) stack-index env)]
         [(foreign-call? expr)
          (emit-foreign-call expr stack-index env)]
@@ -588,7 +588,7 @@
                     [else "je"])])
     (emit "cmpl $~a, %eax" len)
     (emit "~a ~a" jump-ins skip-label)
-    (emit-expr `(funcall (primitive-ref error-args)) stack-index env)
+    (emit-expr `(funcall (lib-primitive-ref error-args)) stack-index env)
     (emit-label skip-label)))
 
 (define (emit-varargs-to-list vararg-offset min-args env)
@@ -761,7 +761,7 @@
   (define (walk-and-annotate expr free-vars)
     (cond
       ([immediate? expr] (list expr '()))
-      ([primitive-ref? expr] (list expr '()))
+      ([lib-primitive-ref? expr] (list expr '()))
       ([identifier? expr] (list expr (if (member expr free-vars) '() (list expr))))
       ([not (list? expr)] (list expr '()))
 
@@ -859,7 +859,7 @@
 
       ([constant-ref? expr] expr)
       ([constant-init? expr] expr)
-      ([primitive-ref? expr] expr)
+      ([lib-primitive-ref? expr] expr)
       ([foreign-call? expr] expr)
       (else `(funcall ,(transform (car expr))
                       ,@(map transform (cdr expr))))))
@@ -915,7 +915,7 @@
       (list 'prim-apply 'cons (translate-quote (car expr)) (translate-quote (cdr expr)))]
       [(vector? expr) (vector-constant->make-vector expr)]
       [(string? expr) (string-constant->make-string expr)]
-      [(symbol? expr) `(funcall (primitive-ref string->symbol) ,(translate-quote (symbol->string expr)))]
+      [(symbol? expr) `(funcall (lib-primitive-ref string->symbol) ,(translate-quote (symbol->string expr)))]
       [else (error 'translate-quote (format "don't know how to quote ~s" expr))]))
 
   (define (transform expr)
@@ -1073,8 +1073,8 @@
     (cond
       [(quote? expr) expr]
       ;; Tag calls to primitives in primitives libary
-      [(primitive-name? expr) `(primitive-ref ,expr)] ;; TODO: primitive-name should be lib-primitives-name
-      [(primitive-ref? expr) expr] ;; Nothing to do if it's already a primitive-ref
+      [(primitive-name? expr) `(lib-primitive-ref ,expr)]
+      [(lib-primitive-ref? expr) expr] ;; Nothing to do if it's already a primitive-ref
       ;; Tag calls to builtin primitives
       [(builtin-prim-apply? expr) `(prim-apply ,(car expr) ,@(map-transform (cdr expr) env))]
       ;; Tag foreign calls

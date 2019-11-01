@@ -123,6 +123,6 @@
          (prim-apply eq? (funcall f) (funcall f))))])
 
 
-(add-tests-with-precompiled-output "primitive refs"
+(add-tests-with-precompiled-output "lib primitive refs"
   [(add-and-add-four 1 2)
-  => (labels () () (funcall (primitive-ref add-and-add-four) 1 2))])
+  => (labels () () (funcall (lib-primitive-ref add-and-add-four) 1 2))])
