@@ -1179,16 +1179,16 @@
      (let ([primitive `(lambda (arg* ...) b b* ...)])
        (set! primitives (append (list (list 'name primitive)) primitives)))]))
 
-(define-lib-primitive (add-and-add-four x y) (prim-apply + 4 (prim-apply + x y)))
-(define-lib-primitive (add-three x) (prim-apply + 3 x))
-(define-lib-primitive (add-four x) (prim-apply + 1 (add-three x)))
+(define-lib-primitive (add-and-add-four x y) (+ 4 (+ x y)))
+(define-lib-primitive (add-three x) (+ 3 x))
+(define-lib-primitive (add-four x) (+ 1 (add-three x)))
 (define-lib-primitive (calls-another-lambda x)
-  (let ((g (lambda (x) (prim-apply + 1 x))))
+  (let ((g (lambda (x) (+ 1 x))))
     (g x)))
 (define-lib-primitive (length lst)
-  (if (prim-apply null? lst)
+  (if (null? lst)
       0
-      (prim-apply add1 (length (prim-apply cdr lst)))))
+      (add1 (length (cdr lst)))))
 
 (define-lib-primitive (error origin message) (foreign-call "error" origin message))
 (define-lib-primitive (error-apply)          (foreign-call "error" "system" "attempt to apply non-procedure"))
@@ -1197,29 +1197,29 @@
 
 (define-lib-primitive (string=? s1 s2)
   (letrec ([rec (lambda (index)
-                  (if (prim-apply eq? index (prim-apply string-length s1))
+                  (if (eq? index (string-length s1))
                       #t
-                      (if (prim-apply char=? (prim-apply string-ref s1 index) (prim-apply string-ref s2 index))
-                          (rec (prim-apply add1 index))
+                      (if (char=? (string-ref s1 index) (string-ref s2 index))
+                          (rec (add1 index))
                           #f)))])
-    (and (prim-apply string? s1) (prim-apply string? s2)
-        (prim-apply eq? (prim-apply string-length s1) (prim-apply string-length s2))
+    (and (string? s1) (string? s2)
+        (eq? (string-length s1) (string-length s2))
         (rec 0))))
 
 (define-lib-primitive (string->symbol s)
   (let ((existing (find_symbol s)))
     (if existing existing
-        (let ((new (prim-apply make-symbol s)))
-          (prim-apply set-car! symbols_list (prim-apply cons new (prim-apply car symbols_list)))
+        (let ((new (make-symbol s)))
+          (set-car! symbols_list (cons new (car symbols_list)))
           new))))
 
 (define-lib-primitive (find_symbol str)
   (letrec ([rec (lambda (ls)
-                  (if (prim-apply null? ls) #f
-                      (if (string=? str (prim-apply symbol->string (prim-apply car ls)))
-                          (prim-apply car ls)
-                          (rec (prim-apply cdr ls)))))])
-    (rec (prim-apply car symbols_list))))
+                  (if (null? ls) #f
+                      (if (string=? str (symbol->string (car ls)))
+                          (car ls)
+                          (rec (cdr ls)))))])
+    (rec (car symbols_list))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
