@@ -1160,34 +1160,6 @@
   ;; TODO: we should really have macros for this, or define and parse a
   ;; separate file
   (list
-    (list 'add-and-add-four '(lambda (x y) (prim-apply + 4 (prim-apply + x y))))
-    (list 'add-three '(lambda (x) (prim-apply + 3 x)))
-    (list 'add-four '(lambda (x) (prim-apply + 1 (add-three x))))
-    (list 'calls-another-lambda '(lambda (x)
-                                   (let ((g (lambda (x) (prim-apply + 1 x))))
-                                     (g x))))
-    (list 'length '(lambda (lst) (if (prim-apply null? lst)
-                                     0
-                                     (prim-apply add1 (length (prim-apply cdr lst))))))
-    (list 'error '(lambda (origin message)
-                    (foreign-call "error" origin message)))
-    (list 'error-apply '(lambda ()
-                          (foreign-call "error" "system" "attempt to apply non-procedure")))
-    (list 'error-args '(lambda ()
-                         (foreign-call "error" "system" "wrong number of arguments")))
-    (list 'error-no-pair '(lambda ()
-                            (foreign-call "error" "system" "argument not a pair")))
-
-    (list 'string=? '(lambda (s1 s2)
-                       (letrec ([rec (lambda (index)
-                                       (if (prim-apply eq? index (prim-apply string-length s1))
-                                           #t
-                                           (if (prim-apply char=? (prim-apply string-ref s1 index) (prim-apply string-ref s2 index))
-                                               (rec (prim-apply add1 index))
-                                               #f)))])
-                         (and (prim-apply string? s1) (prim-apply string? s2)
-                              (prim-apply eq? (prim-apply string-length s1) (prim-apply string-length s2))
-                              (rec 0)))))
     (list 'string '(lambda chars
                      (let ([s (prim-apply make-string (length chars))])
                        (letrec ([fill-chars (lambda (index args)
@@ -1199,19 +1171,55 @@
                          (fill-chars 0 chars)
                          s))))
 
-    (list 'symbols_list '(prim-apply cons '() '()))
-    (list 'string->symbol '(lambda (s) (let ((existing (find_symbol s)))
-                                         (if existing existing
-                                             (let ((new (prim-apply make-symbol s)))
-                                               (prim-apply set-car! symbols_list (prim-apply cons new (prim-apply car symbols_list)))
-                                               new)))))
-    (list 'find_symbol '(lambda (str)
-                          (letrec ([rec (lambda (ls)
-                                          (if (prim-apply null? ls) #f
-                                              (if (string=? str (prim-apply symbol->string (prim-apply car ls)))
-                                                  (prim-apply car ls)
-                                                  (rec (prim-apply cdr ls)))))])
-                            (rec (prim-apply car symbols_list)))))))
+    (list 'symbols_list '(prim-apply cons '() '()))))
+
+(define-syntax define-lib-primitive
+  (syntax-rules ()
+    [(_ (name arg* ...) b b* ...)
+     (let ([primitive `(lambda (arg* ...) b b* ...)])
+       (set! primitives (append (list (list 'name primitive)) primitives)))]))
+
+(define-lib-primitive (add-and-add-four x y) (prim-apply + 4 (prim-apply + x y)))
+(define-lib-primitive (add-three x) (prim-apply + 3 x))
+(define-lib-primitive (add-four x) (prim-apply + 1 (add-three x)))
+(define-lib-primitive (calls-another-lambda x)
+  (let ((g (lambda (x) (prim-apply + 1 x))))
+    (g x)))
+(define-lib-primitive (length lst)
+  (if (prim-apply null? lst)
+      0
+      (prim-apply add1 (length (prim-apply cdr lst)))))
+
+(define-lib-primitive (error origin message) (foreign-call "error" origin message))
+(define-lib-primitive (error-apply)          (foreign-call "error" "system" "attempt to apply non-procedure"))
+(define-lib-primitive (error-args)           (foreign-call "error" "system" "wrong number of arguments"))
+(define-lib-primitive (error-no-pair)        (foreign-call "error" "system" "argument not a pair"))
+
+(define-lib-primitive (string=? s1 s2)
+  (letrec ([rec (lambda (index)
+                  (if (prim-apply eq? index (prim-apply string-length s1))
+                      #t
+                      (if (prim-apply char=? (prim-apply string-ref s1 index) (prim-apply string-ref s2 index))
+                          (rec (prim-apply add1 index))
+                          #f)))])
+    (and (prim-apply string? s1) (prim-apply string? s2)
+        (prim-apply eq? (prim-apply string-length s1) (prim-apply string-length s2))
+        (rec 0))))
+
+(define-lib-primitive (string->symbol s)
+  (let ((existing (find_symbol s)))
+    (if existing existing
+        (let ((new (prim-apply make-symbol s)))
+          (prim-apply set-car! symbols_list (prim-apply cons new (prim-apply car symbols_list)))
+          new))))
+
+(define-lib-primitive (find_symbol str)
+  (letrec ([rec (lambda (ls)
+                  (if (prim-apply null? ls) #f
+                      (if (string=? str (prim-apply symbol->string (prim-apply car ls)))
+                          (prim-apply car ls)
+                          (rec (prim-apply cdr ls)))))])
+    (rec (prim-apply car symbols_list))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
