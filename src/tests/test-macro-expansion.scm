@@ -114,3 +114,7 @@
                                     (prim-apply string-length s2))
                                   (rec 0))))])
      (user-string-eq "foobar" "foobar")) => "#t\n"])
+
+(add-tests-with-precompiled-output "tagging builtins with prim-apply"
+  [(zero? 0) => (labels () () (prim-apply zero? 0))]
+  [(let ([x 1]) (zero? x)) => (labels () () (let ([x 1]) (prim-apply zero? x)))])
