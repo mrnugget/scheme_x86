@@ -1063,8 +1063,9 @@
 
   (define (map-transform ls env) (map (lambda (e) (transform e env)) ls))
 
-  (trace-define (transform expr env)
+  (define (transform expr env)
     (cond
+      [(quote? expr) expr]
       [(primitive-name? expr) `(primitive-ref ,expr)]
       [(identifier? expr)
        (or (lookup-name expr env)

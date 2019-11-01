@@ -26,7 +26,7 @@
    => (labels
         ()
         ()
-        (let ([result (let ([x 1]) (let ([y 2]) (prim-apply + x y)))])
+        (let ([result (let ([x_1 1]) (let ([y_1 2]) (prim-apply + x_1 y_1)))])
           (let ([z 3]) (prim-apply + result z))))]
 
   [(lambda (z) (prim-apply + z (let* ([x 1] [y 2]) (prim-apply + x y))))
