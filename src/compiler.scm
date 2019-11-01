@@ -84,6 +84,7 @@
 (define-list-expr-check if? 'if)
 (define-list-expr-check and? 'and)
 (define-list-expr-check foreign-call? 'foreign-call)
+(define-list-expr-check prim-apply? 'prim-apply)
 
 (define builtin-forms '(if let lambda closure set! quote))
 (define builtin-primitives
@@ -93,6 +94,12 @@
          make-symbol symbol->string string? make-string
          string-set! string-ref string-length make-vector
          vector? vector-set! vector-ref closure?))
+
+(define (builtin-prim-application? expr)
+  (and (list? expr)
+       (not (null? expr))
+       (symbol? (car expr))
+       (member (car expr) builtin-primitives)))
 
 (define (immediate? expr)
   (or (integer? expr) (null? expr) (char? expr) (boolean? expr)))
@@ -1020,50 +1027,6 @@
     (transform expr)))
 
 (define (precompile-macro-expansion expr)
-  (define (transform expr)
-    (cond
-      [(primitive-ref? expr) expr]
-      [(primitive-name? expr)
-       `(primitive-ref ,expr)]
-      [(foreign-call? expr)
-       `(foreign-call ,(cadr expr) ,@(map transform (cddr expr)))]
-      [(funcall? expr)
-       `(funcall ,@(map transform (cdr expr)))]
-      [(if? expr)
-       `(if ,(transform (if-condition expr))
-            ,(transform (if-consequence expr))
-            ,(if (if-alternative? expr) (transform (if-alternative expr)) '()))]
-      [(lambda? expr)
-       `(lambda ,(lambda-vars expr) ,@(map transform (lambda-body expr)))]
-      ([prim-apply? expr]
-       `(prim-apply ,(prim-apply-fn expr) ,@(map transform (prim-apply-args expr))))
-      [(let? expr)
-       (let ([bindings (map (lambda (b) (list (car b) (transform (cadr b)))) (let-bindings expr))])
-         `(let ,bindings ,@(map transform (let-body expr))))]
-      [(let*? expr)
-       (let* ([first-binding (car (let-bindings expr))]
-              [transformed-first-binding (list (list (car first-binding)
-                                                     (transform (cadr first-binding))))]
-              [rest-bindings (cdr (let-bindings expr))])
-         (transform (if (null? rest-bindings)
-             `(let ,transformed-first-binding ,@(map transform (let-body expr)))
-             `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))))]
-
-      [(letrec? expr)
-       (let* ([bindings (let-bindings expr)]
-              [new-bindings (map (lambda (b) `(,(car b) #f)) bindings)]
-              [inits (map (lambda (b) `(set! ,(car b) ,(cadr b))) bindings)])
-         (transform `(let ,new-bindings ,@inits ,@(map transform (let-body expr)))))]
-      [(and? expr)
-       (cond [(null? (cdr expr)) #t]
-             [(null? (cddr expr)) (transform (cadr expr))]
-             [else (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f))])]
-      [(list? expr) (map transform expr)]
-      [else expr]))
-
-  (transform expr))
-
-(define (precompile-alpha-conversion expr)
   (define (gen-name name count)
     (string->symbol (string-append (symbol->string name) "_" (number->string count))))
 
@@ -1104,13 +1067,29 @@
                             (map-lambda-params f (cdr params)))]
       [else (f params)]))
 
+  (define (map-transform ls env) (map (lambda (e) (transform e env)) ls))
+
   (define (transform expr env)
     (cond
-      [(identifier? expr) expr
-                          (or (lookup-name expr env)
-                              (and (primitive-name? expr) expr)
-                              (and (builtin-name? expr) expr)
-                              (error 'alpha-conversion (format "undefined variable ~s" expr)))]
+      [(quote? expr) expr]
+      ;; Tag calls to primitives in primitives libary
+      [(primitive-name? expr) `(primitive-ref ,expr)] ;; TODO: primitive-name should be lib-primitives-name
+      [(primitive-ref? expr) expr] ;; Nothing to do if it's already a primitive-ref
+      ;; Tag calls to builtin primitives
+      [(builtin-prim-application? expr) `(prim-apply ,(car expr) ,@(map-transform (cdr expr) env))]
+      ;; Tag foreign calls
+      [(foreign-call? expr) `(foreign-call ,(cadr expr) ,@(map-transform (cddr expr) env))]
+
+      ;; Make sure alpha-conversion worked
+      [(identifier? expr)
+       (or (lookup-name expr env)
+           (and (primitive-name? expr) expr)
+           (and (builtin-name? expr) expr)
+           (error 'macro-alpha-conversion (format "undefined variable ~s" expr)))]
+      [(if? expr)
+       `(if ,(transform (if-condition expr) env)
+            ,(transform (if-consequence expr) env)
+            ,(if (if-alternative? expr) (transform (if-alternative expr) env) '()))]
       [(lambda? expr)
        (let* ([params (lambda-vars-flattened expr)]
               [new-env (bulk-extend-env params (map unique-name params) env)])
@@ -1118,6 +1097,8 @@
             ,(map-lambda-params (lambda (v) (lookup-name v new-env)) (lambda-vars expr))
             ,@(transform (lambda-body expr) new-env)))]
 
+      ([prim-apply? expr]
+       `(prim-apply ,(prim-apply-fn expr) ,@(map-transform (prim-apply-args expr) env)))
       [(let? expr)
        (let* ([bindings (let-bindings expr)]
               [names (map car bindings)]
@@ -1127,17 +1108,27 @@
                     (list (lookup-name (car binding) new-env)
                           (transform (cadr binding) env)))
                   bindings)
-            ,@(map (lambda (e) (transform e new-env)) (let-body expr))))]
-      [(quote? expr) expr]
-      [(primitive-ref? expr) expr]
-      [(prim-apply? expr)
-       `(prim-apply ,(prim-apply-fn expr)
-                    ,@(map (lambda (e) (transform e env)) (prim-apply-args expr)))]
-      [(foreign-call? expr)
-       `(foreign-call ,(cadr expr) ,@(map (lambda (e) (transform e env)) (cddr expr)))]
-      [(funcall? expr)
-       `(funcall ,@(map (lambda (e) (transform e env)) (cdr expr)))]
-      [(list? expr) (map (lambda (e) (transform e env)) expr)]
+            ,@(map-transform (let-body expr) new-env)))]
+      ;; Higher order transformations
+      [(let*? expr)
+       (let* ([first-binding (car (let-bindings expr))]
+              [transformed-first-binding (list (list (car first-binding)
+                                                     (transform (cadr first-binding) env)))]
+              [rest-bindings (cdr (let-bindings expr))])
+         (transform (if (null? rest-bindings)
+             `(let ,transformed-first-binding ,@(let-body expr))
+             `(let ,transformed-first-binding (let* ,rest-bindings ,@(let-body expr))))
+                    env))]
+      [(letrec? expr)
+       (let* ([bindings (let-bindings expr)]
+              [new-bindings (map (lambda (b) `(,(car b) #f)) bindings)]
+              [inits (map (lambda (b) `(set! ,(car b) ,(cadr b))) bindings)])
+         (transform `(let ,new-bindings ,@inits ,@(let-body expr)) env))]
+      [(and? expr)
+       (cond [(null? (cdr expr)) #t]
+             [(null? (cddr expr)) (transform (cadr expr) env)]
+             [else (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f) env)])]
+      [(list? expr) (map-transform expr env)]
       [else expr]))
 
   (transform expr (new-env)))
@@ -1228,8 +1219,7 @@
       (precompile-add-constants
         (precompile-annotate-free-vars
           (precompile-transform-assignments
-            (precompile-alpha-conversion
-              (precompile-macro-expansion expr))))))))
+            (precompile-macro-expansion expr)))))))
 
 (define (compile-primitives primitives)
   (define (compile-primitive p)

@@ -26,7 +26,7 @@
    => (labels
         ()
         ()
-        (let ([result (let ([x 1]) (let ([y 2]) (prim-apply + x y)))])
+        (let ([result (let ([x_1 1]) (let ([y_1 2]) (prim-apply + x_1 y_1)))])
           (let ([z 3]) (prim-apply + result z))))]
 
   [(lambda (z) (prim-apply + z (let* ([x 1] [y 2]) (prim-apply + x y))))
@@ -114,3 +114,7 @@
                                     (prim-apply string-length s2))
                                   (rec 0))))])
      (user-string-eq "foobar" "foobar")) => "#t\n"])
+
+(add-tests-with-precompiled-output "tagging builtins with prim-apply"
+  [(zero? 0) => (labels () () (prim-apply zero? 0))]
+  [(let ([x 1]) (zero? x)) => (labels () () (let ([x 1]) (prim-apply zero? x)))])
