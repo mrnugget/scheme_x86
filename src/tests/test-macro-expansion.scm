@@ -39,8 +39,20 @@
         (closure label_0))])
 
 (add-tests-with-string-output "and"
-  [(and (prim-apply zero? 0) (prim-apply eq? 3 4)) => "#f\n"]
-  [(and (prim-apply zero? 0) (prim-apply eq? 9 9)) => "#t\n"])
+  [(and #t) => "#t\n"]
+  [(and #f) => "#f\n"]
+  [(and #t #f) => "#f\n"]
+  [(and #t #t) => "#t\n"]
+  [(and #f #t) => "#f\n"]
+  [(and #f #f) => "#f\n"])
+
+(add-tests-with-string-output "or"
+  [(or #t) => "#t\n"]
+  [(or #f) => "#f\n"]
+  [(or #t #t) => "#t\n"]
+  [(or #f #t) => "#t\n"]
+  [(or #t #f) => "#t\n"]
+  [(or #f #f) => "#f\n"])
 
 (add-tests-with-precompiled-output "boolean 'and' to if expressions"
   [(and (prim-apply zero? 0))

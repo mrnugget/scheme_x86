@@ -83,6 +83,7 @@
 (define-list-expr-check quote? 'quote)
 (define-list-expr-check if? 'if)
 (define-list-expr-check and? 'and)
+(define-list-expr-check or? 'or)
 (define-list-expr-check foreign-call? 'foreign-call)
 (define-list-expr-check prim-apply? 'prim-apply)
 
@@ -1131,6 +1132,10 @@
        (cond [(null? (cdr expr)) #t]
              [(null? (cddr expr)) (transform (cadr expr) env)]
              [else (transform `(if ,(cadr expr) (and ,@(cddr expr)) #f) env)])]
+      [(or? expr)
+       (cond [(null? (cdr expr)) #f]
+             [(null? (cddr expr)) (transform (cadr expr) env)]
+             [else (transform `(if (not ,(cadr expr)) (or ,@(cddr expr)) #t) env)])]
       [(list? expr) (map-transform expr env)]
       [else expr]))
 
