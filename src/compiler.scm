@@ -1086,6 +1086,9 @@
            (and (primitive-name? expr) expr)
            (and (builtin-name? expr) expr)
            (error 'macro-alpha-conversion (format "undefined variable ~s" expr)))]
+      ;; Traverse builtin forms
+      [(set? expr)
+       `(set! ,@(map-transform (cdr expr) env))]
       [(if? expr)
        `(if ,(transform (if-condition expr) env)
             ,(transform (if-consequence expr) env)
