@@ -1156,35 +1156,24 @@
     (append (map primitive-label names)
             (map primitive-init-label names))))
 
-(define primitives
-  ;; TODO: we should really have macros for this, or define and parse a
-  ;; separate file
-  (list
-    (list 'string '(lambda chars
-                     (let ([s (prim-apply make-string (length chars))])
-                       (letrec ([fill-chars (lambda (index args)
-                                              (if (prim-apply not (prim-apply null? args))
-                                                  (let ((arg (prim-apply car args))
-                                                        (rest (prim-apply cdr args)))
-                                                    (prim-apply string-set! s index arg)
-                                                    (fill-chars (prim-apply add1 index) rest))))])
-                         (fill-chars 0 chars)
-                         s))))
-
-    (list 'symbols_list '(prim-apply cons '() '()))))
+(define primitives '())
 
 (define-syntax define-lib-primitive
   (syntax-rules ()
     [(_ (name arg* ...) b b* ...)
      (let ([primitive `(lambda (arg* ...) b b* ...)])
-       (set! primitives (append (list (list 'name primitive)) primitives)))]))
+       (set! primitives (append (list (list 'name primitive)) primitives)))]
+    [(_ (name . restarg) b b* ...)
+     (let ([primitive `(lambda restarg b b* ...)])
+       (set! primitives (append (list (list 'name primitive)) primitives)))]
+    [(_ name b)
+      (set! primitives (append (list (list 'name 'b)) primitives))]))
 
 (define-lib-primitive (add-and-add-four x y) (+ 4 (+ x y)))
 (define-lib-primitive (add-three x) (+ 3 x))
 (define-lib-primitive (add-four x) (+ 1 (add-three x)))
-(define-lib-primitive (calls-another-lambda x)
-  (let ((g (lambda (x) (+ 1 x))))
-    (g x)))
+(define-lib-primitive (calls-another-lambda x) (let ((g (lambda (x) (+ 1 x)))) (g x)))
+
 (define-lib-primitive (length lst)
   (if (null? lst)
       0
@@ -1206,11 +1195,23 @@
         (eq? (string-length s1) (string-length s2))
         (rec 0))))
 
+(define-lib-primitive (string . chars)
+  (let ([s (make-string (length chars))])
+    (letrec ([fill-chars (lambda (index args)
+                            (if (not (null? args))
+                                (let ((arg (car args))
+                                      (rest (cdr args)))
+                                  (string-set! s index arg)
+                                  (fill-chars (add1 index) rest))))])
+      (fill-chars 0 chars)
+      s)))
+
+(define-lib-primitive symbols-list (cons '() '()))
 (define-lib-primitive (string->symbol s)
   (let ((existing (find_symbol s)))
     (if existing existing
         (let ((new (make-symbol s)))
-          (set-car! symbols_list (cons new (car symbols_list)))
+          (set-car! symbols-list (cons new (car symbols-list)))
           new))))
 
 (define-lib-primitive (find_symbol str)
@@ -1219,7 +1220,7 @@
                       (if (string=? str (symbol->string (car ls)))
                           (car ls)
                           (rec (cdr ls)))))])
-    (rec (car symbols_list))))
+    (rec (car symbols-list))))
 
 (define (precompile expr)
   (precompile-transform-tailcalls
