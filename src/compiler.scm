@@ -1085,6 +1085,7 @@
       [(identifier? expr)
        (or (lookup-name expr env)
            (and (primitive-name? expr) expr)
+           ;; TODO: See comment in `src/tests/test-macro-expansion.scm`
            (and (builtin-name? expr) expr)
            (error 'macro-alpha-conversion (format "undefined variable ~s" expr)))]
       ;; Traverse builtin forms

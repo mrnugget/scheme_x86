@@ -130,3 +130,10 @@
 (add-tests-with-precompiled-output "tagging builtins with prim-apply"
   [(zero? 0) => (labels () () (prim-apply zero? 0))]
   [(let ([x 1]) (zero? x)) => (labels () () (let ([x 1]) (prim-apply zero? x)))])
+
+;; TODO: in order for this to work, we need to extend the `identifier?` check
+;; in macro expansion to wrap the builtin in a
+;; `(lambda (<unique-param-names>) (prim-apply <builtin-name> <unique-param-names))`
+;; For that to work though, we need to somewhere define how many params each builtin has
+(add-tests-with-string-output "passing builtin functions around"
+  [((lambda (f) (f 1 2)) +) => "3\n"])
