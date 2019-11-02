@@ -1222,14 +1222,6 @@
                           (rec (cdr ls)))))])
     (rec (car symbols-list))))
 
-(define (precompile expr)
-  (precompile-transform-tailcalls
-    (precompile-add-code-labels
-      (precompile-add-constants
-        (precompile-annotate-free-vars
-          (precompile-transform-assignments
-            (precompile-macro-expansion expr)))))))
-
 (define (compile-primitives primitives)
   (define (compile-primitive p)
     (let* ([name (car p)]
@@ -1276,6 +1268,15 @@
     (parameterize ([compile-port p])
       (compile-primitives primitives))
     (close-output-port p)))
+
+
+(define (precompile expr)
+  (precompile-transform-tailcalls
+    (precompile-add-code-labels
+      (precompile-add-constants
+        (precompile-annotate-free-vars
+          (precompile-transform-assignments
+            (precompile-macro-expansion expr)))))))
 
 (define (compile-program expr)
   (set! label-count 0)
