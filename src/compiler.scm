@@ -484,15 +484,21 @@
           (if apply-call
             (let ([loop-label (unique-label)]
                   [done-label (unique-label)]
+                  [no-args-label (unique-label)]
                   [setup-label (unique-label)]
                   [last-arg-stack-index stack-index])
 
+              (emit "movl $0, %ecx")
+
               ;; Move last argument to %eax and make sure it's a pair
               (emit "movl ~a(%esp), %eax" last-arg-stack-index)
+              ;; if `cdr` of current pair is nil, we're done
+              (emit "cmpl $~s, %eax" empty-list)
+              (emit "je ~a" no-args-label)
+
               (emit-ensure-eax-is object-tag-pair 'error-no-pair stack-index env)
 
               ;; use %ecx as counter to keep track of how many args we spliced
-              (emit "movl $0, %ecx")
               ;; STATE:
               ;; %eax = next pair
               ;; %ecx = 0
@@ -542,6 +548,7 @@
               (emit "shl $~s, %eax" 2)
               (emit "add %eax, %esp") ;; shift  stack pointer
               ;; %ecx holds number of spliced arguments, save that in %eax
+              (emit-label no-args-label)
               (emit "movl %ecx, %eax"))
 
             ;; Not apply: (length args) is real length

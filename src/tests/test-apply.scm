@@ -6,6 +6,10 @@
   [(let ([g (lambda (x) (if (prim-apply pair? x) #f (prim-apply + x x)))])
       (g '(9999))) => "#f\n"]
 
+  ;; Arg list with 0 element
+  [(let ([g (lambda () 9999)])
+      (apply g '())) => "9999\n"]
+
   ;; Arg list with 1 element
   [(let ([g (lambda (x) x)])
       (apply g '(9999))) => "9999\n"]
