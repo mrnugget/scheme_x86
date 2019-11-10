@@ -508,12 +508,6 @@
 
               (emit-label loop-label)
 
-              ;; Decrement stack pointer for this iteration by `arg-count * wordsize`
-              ;; so we can always save the newest unspliced arg in -8(%esp)
-              (emit "mov %ecx, %eax")
-              (emit "shl $~s, %eax" 2)
-              (emit "sub %eax, %esp") ;; shift  stack pointer
-
               ;; Move `car` to %eax
               (emit "movl -1(%edi), %eax")
 
@@ -531,15 +525,19 @@
 
               ;; Otherwise, move cdr to %edi
               (emit "movl 3(%edi), %edi")
+
+              ;; Decrement stack pointer for next iteration by `wordsize`
+              ;; so we can always save the newest unspliced arg in -8(%esp)
+              (emit "subl $~a, %esp" wordsize)
+
               (emit "jmp ~a" loop-label)
 
               ;; --- LOOP END ---
 
               (emit-label done-label)
               ;; Now that we're done, we need to unshift %esp again.
-              ;; if %ecx==1 we don't need to do anything, so we correct it
               (emit "mov %ecx, %eax")
-              ;; todo: try this to correct
+              ;; If %ecx==1 we didn't decrease %esp, so we correct it this case
               (emit "subl $1, %eax")
               (emit "shl $~s, %eax" 2)
               (emit "add %eax, %esp") ;; shift  stack pointer
