@@ -24,4 +24,8 @@
 
   ;; Arg list with 4 elements
   [(let ([g (lambda (x y z xx) (prim-apply + xx (prim-apply + (prim-apply + x y) z)))])
-      (apply g '(9999 8888 7777 6666))) => "33330\n"])
+      (apply g '(9999 8888 7777 6666))) => "33330\n"]
+
+  ;; Arg list with 5 elements
+  [(let ([g (lambda (a b c d e f) (string a b c d e f))])
+    (apply g '(#\a #\b #\c #\d #\e #\f))) => "\"abcdef\"\n"])
