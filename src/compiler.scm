@@ -87,7 +87,7 @@
 (define-list-expr-check foreign-call? 'foreign-call)
 (define-list-expr-check prim-apply? 'prim-apply)
 
-(define builtin-forms '(if let lambda closure set! quote))
+(define builtin-forms '(apply if let lambda closure set! quote))
 (define builtin-primitives
   '(add1 sub1 fixnum->char char->fixnum zero? null?
          not fixnum? boolean? char? + eq? char=? cons
@@ -412,13 +412,14 @@
     (emit-label end-label)))
 
 (define (emit-funcall expr stack-index env tailcall)
-  (let* ([call-target (cadr expr)]
+  (let* ([apply-call (eq? 'apply (cadr expr))]
+         [call-target ((if apply-call caddr cadr) expr)]
 
          ; stack offset that args start at
          ; the (* 2 wordsize) is space for return addr and closure
          [args-start (- stack-index (* 2 wordsize))]
 
-         [args (cddr expr)]
+         [args ((if apply-call cdddr cddr) expr)]
          ; build stack offsets for each argument
          ; results in a list of (arg-body stack-offset) pairs
          [args (map list args
@@ -468,8 +469,87 @@
         (begin
           ; advance %esp and call the function
           (emit "subl $~a, %esp" (- stack-index))
-          ;; save number of args to %eax
-          (emit "mov $~a, %eax" (length args))
+          ;; AFTER this `subl` and BEFORE the `call` instruction below
+          ;; old-closure: %esp
+          ;; place for return address: %esp-4
+          ;; first-arg: %esp-8
+          ;; second-arg: %esp-12
+          ;; ....
+          ;; last-arg: %esp - (stack-index)
+
+          ;; AFTER `call` (inside the function):
+          ;; first-arg: %esp-4
+          ;; second-arg: %esp-8
+
+          (if apply-call
+            (let ([loop-label (unique-label)]
+                  [done-label (unique-label)]
+                  [setup-label (unique-label)]
+                  [last-arg-stack-index stack-index])
+
+              ;; Move last argument to %eax and make sure it's a pair
+              (emit "movl ~a(%esp), %eax" last-arg-stack-index)
+              (emit-ensure-eax-is object-tag-pair 'error-no-pair stack-index env)
+
+              ;; use %ecx as counter to keep track of how many args we spliced
+              (emit "movl $0, %ecx")
+              ;; STATE:
+              ;; %eax = next pair
+              ;; %ecx = 0
+              ;; %edi = <garbage>
+
+              (emit "movl %eax, %edi")
+              ;; STATE:
+              ;; %eax = next pair
+              ;; %ecx = 0
+              ;; %edi = next pair
+
+              ;; --- LOOP START ---
+
+              (emit-label loop-label)
+
+              ;; Decrement stack pointer for this iteration by `arg-count * wordsize`
+              ;; so we can always save the newest unspliced arg in -8(%esp)
+              (emit "mov %ecx, %eax")
+              (emit "shl $~s, %eax" 2)
+              (emit "sub %eax, %esp") ;; shift  stack pointer
+
+              ;; Move `car` to %eax
+              (emit "movl -1(%edi), %eax")
+
+              ;; Move it to the place of last arg, which is -8(%esp)
+              ;; We do this for every arg we unsplice. For that to work
+              ;; we had to do the shift above.
+              (emit "movl %eax, ~a(%esp)" last-arg-stack-index)
+
+              ;; Inc counter
+              (emit "addl $1, %ecx")
+
+              ;; if `cdr` of current pair is nil, we're done
+              (emit "cmpl $~s, 3(%edi)" empty-list)
+              (emit "je ~a" done-label)
+
+              ;; Otherwise, move cdr to %edi
+              (emit "movl 3(%edi), %edi")
+              (emit "jmp ~a" loop-label)
+
+              ;; --- LOOP END ---
+
+              (emit-label done-label)
+              ;; Now that we're done, we need to unshift %esp again.
+              ;; if %ecx==1 we don't need to do anything, so we correct it
+              (emit "mov %ecx, %eax")
+              ;; todo: try this to correct
+              (emit "subl $1, %eax")
+              (emit "shl $~s, %eax" 2)
+              (emit "add %eax, %esp") ;; shift  stack pointer
+              ;; %ecx holds number of spliced arguments, save that in %eax
+              (emit "movl %ecx, %eax"))
+
+            ;; Not apply: (length args) is real length
+            ;; save number of args to %eax
+            (emit "mov $~a, %eax" (length args)))
+
           (emit "call *(%edx)")
 
           ; restore the stack pointer afterwards and reload our current closure
