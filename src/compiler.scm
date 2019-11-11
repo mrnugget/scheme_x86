@@ -488,30 +488,25 @@
                   [setup-label (unique-label)]
                   [last-arg-stack-index stack-index])
 
+              ;; use %ecx as counter to keep track of how many args we spliced
               (emit "movl $0, %ecx")
 
-              ;; Move last argument to %eax and make sure it's a pair
+              ;; Move last argument to %eax
               (emit "movl ~a(%esp), %eax" last-arg-stack-index)
-              ;; if `cdr` of current pair is nil, we're done
+              ;; If it's is nil, we're done
               (emit "cmpl $~s, %eax" empty-list)
               (emit "je ~a" no-args-label)
-
+              ;; If not, we need to make sure it's a pair
               (emit-ensure-eax-is object-tag-pair 'error-no-pair stack-index env)
 
-              ;; use %ecx as counter to keep track of how many args we spliced
-              ;; STATE:
-              ;; %eax = next pair
-              ;; %ecx = 0
-              ;; %edi = <garbage>
-
+              ;; Use %edi to always store the "next pair"
               (emit "movl %eax, %edi")
-              ;; STATE:
+              ;; State before start of loop
               ;; %eax = next pair
               ;; %ecx = 0
               ;; %edi = next pair
 
               ;; --- LOOP START ---
-
               (emit-label loop-label)
 
               ;; Move `car` to %eax
@@ -537,7 +532,6 @@
               (emit "subl $~a, %esp" wordsize)
 
               (emit "jmp ~a" loop-label)
-
               ;; --- LOOP END ---
 
               (emit-label done-label)
