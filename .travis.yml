@@ -4,7 +4,7 @@ services:
 - docker
 
 before_install:
-- docker build -t scheme_x86_travis -f Dockerfile.travis .
+- docker build -t scheme_x86 .
 
 script:
-- docker run -it -v $(pwd):/code scheme_x86_travis:latest /bin/bash -c 'cd /code/src/ && make test'
+- docker run -it -v $(pwd):/code scheme_x86 -c 'cd /code/src/ && make test'
