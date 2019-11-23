@@ -150,7 +150,6 @@
 (define (if-alternative? expr) (not (null? (cdddr expr))))
 (define (if-alternative expr) (cadddr expr))
 
-
 (define (emit-prim-apply-args expr stack-index env)
   (for-each
     (lambda (e) (emit-expr e stack-index env))
@@ -575,9 +574,9 @@
 
     ;; Increase allocation pointer in %esi
     ;; Add 7+((length-free-vars + 1)*wordsize) to pointer in %esi because
-    ;; * 7 to align to multiple of 8
-    ;; * `+ 1` because that's the size of the label we stored and want to skip.
-    ;; * `+ length-free-vars` because that's the free vars stored after label we want to skip
+    ;; - `7` to align to multiple of 8
+    ;; - `+ 1` because that's the size of the label we stored and want to skip.
+    ;; - `+ length-free-vars` because that's the free vars stored after label we want to skip
     ;; then bitwise-AND it with -8
 
     (emit "addl $~a, %esi" (+ 7 (* wordsize (+ 1 (length free-vars)))))
@@ -619,7 +618,6 @@
       (lambda (arg) (begin (emit-expr (car arg) eval-stack-index env)
                            (emit "movl %eax, ~a(%esp)" (cadr arg))))
       args)
-
 
     (emit "movl %edx, ~a(%esp)" (- stack-index))
 
