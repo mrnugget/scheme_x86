@@ -1,0 +1,8 @@
+FROM weinholt/chezscheme:latest
+
+RUN apt-get update && apt-get -y --no-install-recommends install \
+       gcc \
+       gcc-multilib \
+       libc6-dev \
+       make \
+  && rm -rf /var/lib/apt/lists/*
